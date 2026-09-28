@@ -951,52 +951,94 @@ def graph_height(r):
 
 
 def graph_ellipsoid(r):
-    u = np.linspace(0, 2*np.pi, 78)
-    v = np.linspace(-np.pi/2, np.pi/2, 48)
-    U, Vv = np.meshgrid(u, v)
-    X = MODEL.a*np.cos(Vv)*np.cos(U)/1000
-    Y = MODEL.a*np.cos(Vv)*np.sin(U)/1000
-    Z = MODEL.b*np.sin(Vv)/1000
+    """Elipsoide WGS84 con Norte/Sur explícitos y vista fija."""
+    lat = np.linspace(-np.pi/2, np.pi/2, 70)
+    lon = np.linspace(-np.pi, np.pi, 100)
+    LAT, LON = np.meshgrid(lat, lon, indexing="ij")
 
-    C = np.empty_like(Vv)
-    for i in range(Vv.shape[0]):
-        for j in range(Vv.shape[1]):
-            C[i, j] = calculate_model(float(np.degrees(Vv[i, j])), 0.0, 0.0).V_total
+    sin_lat = np.sin(LAT)
+    cos_lat = np.cos(LAT)
+    N = A / np.sqrt(1 - E2 * sin_lat**2)
 
-    colorscale = [
-        [0.00, "#3E453A"],
-        [0.25, "#626955"],
-        [0.50, "#B79A68"],
-        [0.75, "#B66C50"],
-        [1.00, "#6A3C31"],
-    ]
+    X = (N * cos_lat * np.cos(LON)) / 1000.0
+    Y = (N * cos_lat * np.sin(LON)) / 1000.0
+    Z = ((1 - E2) * N * sin_lat) / 1000.0
+
+    V = np.empty_like(LAT, dtype=float)
+    for i in range(LAT.shape[0]):
+        phi_deg = np.degrees(LAT[i, 0])
+        rr = calculate_model(float(phi_deg), r.lam_deg, 0.0)
+        V[i, :] = rr.V_total
+
+    px, py, pz = r.X / 1000.0, r.Y / 1000.0, r.Z / 1000.0
 
     fig = go.Figure()
+
     fig.add_trace(go.Surface(
-        x=X, y=Y, z=Z, surfacecolor=C, colorscale=colorscale,
-        colorbar=dict(title="V [J/kg]", len=.65),
-        hovertemplate="X=%{x:.1f} km<br>Y=%{y:.1f} km<br>Z=%{z:.1f} km<extra></extra>"
+        x=X, y=Y, z=Z,
+        surfacecolor=V,
+        colorscale=[
+            [0.0, "#3F493D"],
+            [0.45, "#8E8A68"],
+            [0.72, "#C39A72"],
+            [1.0, "#875744"],
+        ],
+        colorbar=dict(title="V [J/kg]", len=.68, thickness=20, x=1.03),
+        hovertemplate="X=%{x:.1f} km<br>Y=%{y:.1f} km<br>Z=%{z:.1f} km<br>V=%{surfacecolor:.2f} J/kg<extra></extra>",
+        showscale=True
     ))
+
     fig.add_trace(go.Scatter3d(
-        x=[r.X/1000], y=[r.Y/1000], z=[r.Z/1000],
-        mode="markers+text", text=["P"], textposition="top center",
-        marker=dict(size=7, color="#EBC8BB", line=dict(color=INK, width=2)),
-        name="Punto P"
+        x=[px], y=[py], z=[pz],
+        mode="markers+text",
+        marker=dict(size=6, color=ROSE, line=dict(color="white", width=2)),
+        text=["P"],
+        textposition="top center",
+        name="Punto P",
+        hovertemplate=(
+            "Punto P<br>"
+            f"φ={r.phi_deg:.4f}°<br>"
+            f"λ={r.lam_deg:.4f}°<br>"
+            f"h={r.h:.2f} m<extra></extra>"
+        )
     ))
+
+    pole_z = B / 1000.0
+    fig.add_trace(go.Scatter3d(
+        x=[0, 0], y=[0, 0], z=[pole_z * 1.08, -pole_z * 1.08],
+        mode="markers+text",
+        marker=dict(size=5, color=[MOSS, CLAY]),
+        text=["NORTE (+Z)", "SUR (−Z)"],
+        textposition=["top center", "bottom center"],
+        hoverinfo="skip",
+        showlegend=False
+    ))
+
     fig.update_layout(
-        title=dict(text="Elipsoide WGS84 coloreado por potencial", x=.02, xanchor="left"),
-        paper_bgcolor=PAPER, font=dict(family="Segoe UI, Arial", color=INK),
+        title=dict(
+            text="Elipsoide WGS84 coloreado por potencial · Norte (+Z) / Sur (−Z)",
+            x=.02, xanchor="left", font=dict(size=20)
+        ),
+        paper_bgcolor=PAPER,
+        font=dict(family="Segoe UI, Arial", color=INK),
         scene=dict(
             bgcolor=PAPER,
-            xaxis=dict(title="X [km]", gridcolor=GRID),
-            yaxis=dict(title="Y [km]", gridcolor=GRID),
-            zaxis=dict(title="Z [km]", gridcolor=GRID),
+            xaxis=dict(title="X [km]", gridcolor=GRID, zerolinecolor=GRID, showspikes=False),
+            yaxis=dict(title="Y [km]", gridcolor=GRID, zerolinecolor=GRID, showspikes=False),
+            zaxis=dict(title="Z [km] · Norte (+) / Sur (−)", gridcolor=GRID, zerolinecolor=GRID, showspikes=False),
             aspectmode="data",
+            camera=dict(
+                eye=dict(x=1.45, y=1.45, z=1.05),
+                up=dict(x=0, y=0, z=1)
+            ),
+            dragmode=False
         ),
-        margin=dict(l=0, r=0, t=60, b=0)
+        margin=dict(l=0, r=85, t=80, b=20),
+        showlegend=False,
+        uirevision="fixed-wgs84-view"
     )
-    return fig
 
+    return fig
 
 def graph_surface(r):
     phis = np.linspace(0, 90, 46)
