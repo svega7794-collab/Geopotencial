@@ -958,11 +958,11 @@ def graph_ellipsoid(r):
 
     sin_lat = np.sin(LAT)
     cos_lat = np.cos(LAT)
-    N = A / np.sqrt(1 - E2 * sin_lat**2)
+    N = MODEL.a / np.sqrt(1 - MODEL.e2 * sin_lat**2)
 
     X = (N * cos_lat * np.cos(LON)) / 1000.0
     Y = (N * cos_lat * np.sin(LON)) / 1000.0
-    Z = ((1 - E2) * N * sin_lat) / 1000.0
+    Z = ((1 - MODEL.e2) * N * sin_lat) / 1000.0
 
     V = np.empty_like(LAT, dtype=float)
     for i in range(LAT.shape[0]):
@@ -1003,7 +1003,7 @@ def graph_ellipsoid(r):
         )
     ))
 
-    pole_z = B / 1000.0
+    pole_z = MODEL.b / 1000.0
     fig.add_trace(go.Scatter3d(
         x=[0, 0], y=[0, 0], z=[pole_z * 1.08, -pole_z * 1.08],
         mode="markers+text",
