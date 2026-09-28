@@ -30,6 +30,8 @@ TEAM = [
     {"name": "Stephany Vega", "student_code": "20241025033", "list_code": "28"},
 ]
 AUTHORS = [member["name"] for member in TEAM]
+COURSE_GROUP = "025-62"
+COURSE_NAME = "Geodesia Física"
 
 RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 BASE_DIR = Path(__file__).resolve().parent
@@ -364,6 +366,7 @@ def _build_premium_workbook(history_rows=None):
     )
     info = [
         ("Integrantes", team_text),
+        ("Grupo / asignatura", f"{COURSE_GROUP} · {COURSE_NAME}"),
         ("Modelo de referencia", "WGS84"),
         ("Magnitud calculada", "Potencial gravitacional terrestre"),
         ("Unidad final", "J/kg (equivalente a m²/s²)"),
@@ -1349,11 +1352,14 @@ body{{margin:0;background:#F7F2EC;color:#2C2926;font-family:Segoe UI,Arial,sans-
 .total{{background:#59624E;color:white;padding:24px;border-radius:20px;font-size:28px;font-weight:800}}
 table{{width:100%;border-collapse:collapse;background:#FFFDFC}} th,td{{padding:12px;border-bottom:1px solid #E1D8D0;text-align:left}} th{{background:#3F3A36;color:white}}
 </style><script>{plotly_js}</script></head><body><div class="wrap">
-<div class="hero"><div class="eyebrow">GEODESIA FÍSICA · WGS84 · INFORME CIENTÍFICO</div><h1>GeoPotencial 6</h1><div>Potencial gravitacional de la Tierra por aportes</div><p>{' · '.join(AUTHORS)}</p>
+<div class="hero"><div class="eyebrow">GEODESIA FÍSICA · GRUPO 025-62 · WGS84 · INFORME CIENTÍFICO</div><h1>GeoPotencial 6</h1><div>Potencial gravitacional de la Tierra por aportes</div><p>{' · '.join(AUTHORS)}</p>
 <div style="margin-top:8px;font-size:13px;opacity:.88">
   Laura Vargas · 20241025003 · Lista 27 &nbsp;|&nbsp;
   Michael Ramirez · 20232025071 · Lista 29 &nbsp;|&nbsp;
   Stephany Vega · 20241025033 · Lista 28
+</div>
+<div style="margin-top:8px;font-size:13px;opacity:.88">
+  Grupo 025-62 · Geodesia Física
 </div></div>
 <div class="section grid">
 <div class="card"><small>φ</small><h3>{r.phi_deg:.4f}°</h3></div>
