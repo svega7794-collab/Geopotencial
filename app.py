@@ -17,6 +17,7 @@ from flask import Flask, jsonify, request, send_file, Response
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.chart import BarChart, Reference
 from plotly.subplots import make_subplots
 from plotly.offline import get_plotlyjs
 
@@ -192,49 +193,501 @@ def result_payload(r: Result) -> dict:
 
 # ----------------------------- Excel ---------------------------------
 
-HEAD_FILL = PatternFill("solid", fgColor="3F3A36")
-ACCENT_FILL = PatternFill("solid", fgColor="B66C50")
-SOFT_FILL = PatternFill("solid", fgColor="F2ECE5")
-WHITE_FONT = Font(color="FFFFFF", bold=True)
-THIN = Side(style="thin", color="D7CEC4")
+# Paleta Prestige: cálida, sobria y consistente con la interfaz web.
+XL_PAPER = "F7F2EC"
+XL_CARD = "FFFDFC"
+XL_SOFT = "EFE7DE"
+XL_INK = "2C2926"
+XL_GRAPHITE = "3C3834"
+XL_MOSS = "59624E"
+XL_CLAY = "B66C50"
+XL_ROSE = "B98E87"
+XL_GOLD = "B79A68"
+XL_LINE = "D8CFC6"
+XL_WHITE = "FFFFFF"
+
+THIN = Side(style="thin", color=XL_LINE)
+MEDIUM = Side(style="medium", color=XL_GRAPHITE)
+BORDER = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+
+TITLE_FONT = Font(name="Aptos Display", size=22, bold=True, color=XL_INK)
+SUBTITLE_FONT = Font(name="Aptos", size=11, italic=True, color="756F67")
+SECTION_FONT = Font(name="Aptos", size=11, bold=True, color=XL_WHITE)
+HEADER_FONT = Font(name="Aptos", size=10, bold=True, color=XL_WHITE)
+LABEL_FONT = Font(name="Aptos", size=10, bold=True, color=XL_GRAPHITE)
+VALUE_FONT = Font(name="Aptos", size=10, color=XL_INK)
+MATH_FONT = Font(name="Cambria Math", size=11, color=XL_INK)
+MATH_BOLD = Font(name="Cambria Math", size=11, bold=True, color=XL_INK)
+BIG_RESULT_FONT = Font(name="Aptos Display", size=20, bold=True, color=XL_WHITE)
+SMALL_WHITE_FONT = Font(name="Aptos", size=9, color=XL_WHITE)
+
+FILL_PAPER = PatternFill("solid", fgColor=XL_PAPER)
+FILL_CARD = PatternFill("solid", fgColor=XL_CARD)
+FILL_SOFT = PatternFill("solid", fgColor=XL_SOFT)
+FILL_GRAPHITE = PatternFill("solid", fgColor=XL_GRAPHITE)
+FILL_MOSS = PatternFill("solid", fgColor=XL_MOSS)
+FILL_CLAY = PatternFill("solid", fgColor=XL_CLAY)
+FILL_GOLD = PatternFill("solid", fgColor=XL_GOLD)
+FILL_ROSE = PatternFill("solid", fgColor=XL_ROSE)
+
+PREMIUM_SHEETS = ["Portada", "Resumen", "Desarrollo matemático", "Historial", "Constantes WGS84"]
+
+
+def _set_sheet_canvas(ws, zoom=90):
+    ws.sheet_view.showGridLines = False
+    ws.sheet_view.zoomScale = zoom
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.outlinePr.summaryBelow = True
+
+
+def _paint(ws, cell_range, fill=FILL_CARD, border=BORDER):
+    for row in ws[cell_range]:
+        for c in row:
+            c.fill = fill
+            c.border = border
+
+
+def _merge_label(ws, cell_range, text, fill=FILL_GRAPHITE, font=SECTION_FONT, align="left"):
+    ws.merge_cells(cell_range)
+    c = ws[cell_range.split(":")[0]]
+    c.value = text
+    c.fill = fill
+    c.font = font
+    c.alignment = Alignment(horizontal=align, vertical="center")
+    _paint(ws, cell_range, fill=fill)
+    c.font = font
+
+
+def _title(ws, cell_range, text, subtitle=None):
+    ws.merge_cells(cell_range)
+    c = ws[cell_range.split(":")[0]]
+    c.value = text
+    c.font = TITLE_FONT
+    c.alignment = Alignment(horizontal="left", vertical="center")
+    if subtitle:
+        row = c.row + 1
+        start_col = c.column
+        end_col = ws[cell_range.split(":")[1]].column
+        ws.merge_cells(start_row=row, start_column=start_col, end_row=row, end_column=end_col)
+        sc = ws.cell(row=row, column=start_col)
+        sc.value = subtitle
+        sc.font = SUBTITLE_FONT
+        sc.alignment = Alignment(horizontal="left", vertical="center")
+
+
+def _style_value_cell(c, number_format=None, bold=False, fill=FILL_CARD, align="left"):
+    c.fill = fill
+    c.border = BORDER
+    c.font = Font(name="Aptos", size=10, bold=bold, color=XL_INK)
+    c.alignment = Alignment(horizontal=align, vertical="center", wrap_text=True)
+    if number_format:
+        c.number_format = number_format
+
+
+def _style_header_row(ws, row, start_col, end_col, fill=FILL_GRAPHITE):
+    for col in range(start_col, end_col + 1):
+        c = ws.cell(row=row, column=col)
+        c.fill = fill
+        c.font = HEADER_FONT
+        c.border = BORDER
+        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+
+def _apply_history_row_style(ws, row):
+    fill = FILL_CARD if row % 2 == 0 else FILL_PAPER
+    for col in range(1, 11):
+        c = ws.cell(row=row, column=col)
+        c.fill = fill
+        c.border = BORDER
+        c.font = VALUE_FONT
+        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    for col in (3, 4, 5, 6, 10):
+        ws.cell(row=row, column=col).number_format = "0.0000"
+    for col in (7, 8, 9):
+        ws.cell(row=row, column=col).number_format = "0.0000000000E+00"
+
+
+def _build_premium_workbook(history_rows=None):
+    """Create the complete premium workbook, optionally preserving legacy history rows."""
+    history_rows = history_rows or []
+    wb = Workbook()
+    portada = wb.active
+    portada.title = "Portada"
+    resumen = wb.create_sheet("Resumen")
+    desarrollo = wb.create_sheet("Desarrollo matemático")
+    hist = wb.create_sheet("Historial")
+    const = wb.create_sheet("Constantes WGS84")
+
+    # ---------------- Portada ----------------
+    _set_sheet_canvas(portada, 95)
+    portada.sheet_properties.tabColor = XL_CLAY
+    widths = {"A": 4, "B": 18, "C": 18, "D": 18, "E": 18, "F": 18, "G": 18, "H": 4}
+    for col, width in widths.items():
+        portada.column_dimensions[col].width = width
+    for r in range(1, 32):
+        portada.row_dimensions[r].height = 22
+
+    portada.merge_cells("B2:G4")
+    c = portada["B2"]
+    c.value = "GeoPotencial 6"
+    c.font = Font(name="Aptos Display", size=30, bold=True, color=XL_WHITE)
+    c.fill = FILL_GRAPHITE
+    c.alignment = Alignment(horizontal="left", vertical="center")
+    _paint(portada, "B2:G4", FILL_GRAPHITE, Border(bottom=MEDIUM))
+    portada["B2"].font = Font(name="Aptos Display", size=30, bold=True, color=XL_WHITE)
+
+    portada.merge_cells("B5:G5")
+    portada["B5"] = "PRESTIGE WEB EDITION · GEODESIA FÍSICA"
+    portada["B5"].font = Font(name="Aptos", size=11, bold=True, color=XL_CLAY)
+    portada["B5"].alignment = Alignment(horizontal="left")
+
+    _merge_label(portada, "B8:G8", "MODELO MATEMÁTICO", FILL_MOSS)
+    portada.merge_cells("B9:G11")
+    portada["B9"] = "V = (kM/r) · [ C.E + C.A + C.A.E ]"
+    portada["B9"].font = Font(name="Cambria Math", size=18, bold=True, color=XL_INK)
+    portada["B9"].alignment = Alignment(horizontal="center", vertical="center")
+    _paint(portada, "B9:G11", FILL_CARD)
+    portada["B9"].font = Font(name="Cambria Math", size=18, bold=True, color=XL_INK)
+
+    _merge_label(portada, "B13:G13", "INFORMACIÓN DEL PROYECTO", FILL_GRAPHITE)
+    info = [
+        ("Equipo", " · ".join(AUTHORS)),
+        ("Modelo de referencia", "WGS84"),
+        ("Magnitud calculada", "Potencial gravitacional terrestre"),
+        ("Unidad final", "J/kg (equivalente a m²/s²)"),
+    ]
+    for i, (label, value) in enumerate(info, start=14):
+        portada.merge_cells(start_row=i, start_column=2, end_row=i, end_column=3)
+        portada.merge_cells(start_row=i, start_column=4, end_row=i, end_column=7)
+        portada.cell(i, 2, label)
+        portada.cell(i, 4, value)
+        _paint(portada, f"B{i}:C{i}", FILL_SOFT)
+        _paint(portada, f"D{i}:G{i}", FILL_CARD)
+        portada.cell(i, 2).font = LABEL_FONT
+        portada.cell(i, 4).font = VALUE_FONT
+        portada.cell(i, 2).alignment = Alignment(vertical="center")
+        portada.cell(i, 4).alignment = Alignment(vertical="center", wrap_text=True)
+
+    _merge_label(portada, "B20:G20", "RESULTADO MÁS RECIENTE", FILL_CLAY)
+    portada.merge_cells("B21:G24")
+    portada["B21"] = "Registre un cálculo desde la aplicación para actualizar este bloque."
+    portada["B21"].font = BIG_RESULT_FONT
+    portada["B21"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    _paint(portada, "B21:G24", FILL_CLAY)
+    portada["B21"].font = BIG_RESULT_FONT
+
+    portada.merge_cells("B27:G28")
+    portada["B27"] = (
+        "El archivo conserva el historial de cálculos y documenta las ecuaciones, "
+        "constantes WGS84, sustituciones numéricas y aportes del potencial."
+    )
+    portada["B27"].font = SUBTITLE_FONT
+    portada["B27"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    # ---------------- Resumen ----------------
+    _set_sheet_canvas(resumen, 90)
+    resumen.sheet_properties.tabColor = XL_MOSS
+    for col, width in {"A": 23, "B": 18, "C": 13, "D": 34, "E": 23, "F": 18, "G": 13, "H": 16}.items():
+        resumen.column_dimensions[col].width = width
+    _title(resumen, "A1:H1", "Resumen del cálculo", "Variables, geometría, aportes y potencial total")
+    resumen.row_dimensions[1].height = 32
+
+    _merge_label(resumen, "A4:C4", "DATOS DE ENTRADA", FILL_MOSS)
+    _merge_label(resumen, "E4:H4", "POTENCIAL TOTAL", FILL_CLAY)
+    for rr, label, unit in [(5, "Latitud geodésica φ", "°"), (6, "Longitud geodésica λ", "°"), (7, "Altura elipsoidal h", "m")]:
+        resumen.cell(rr, 1, label); resumen.cell(rr, 3, unit)
+        _style_value_cell(resumen.cell(rr, 1), bold=True, fill=FILL_SOFT)
+        _style_value_cell(resumen.cell(rr, 2), "0.0000", align="right")
+        _style_value_cell(resumen.cell(rr, 3), fill=FILL_SOFT, align="center")
+    resumen.merge_cells("E5:H7")
+    resumen["E5"] = "Sin cálculo registrado"
+    resumen["E5"].font = BIG_RESULT_FONT
+    resumen["E5"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    _paint(resumen, "E5:H7", FILL_CLAY)
+    resumen["E5"].font = BIG_RESULT_FONT
+
+    _merge_label(resumen, "A10:C10", "GEOMETRÍA DEL PUNTO", FILL_GRAPHITE)
+    geom = [
+        (11, "Radio de curvatura N", "m"),
+        (12, "Radio geocéntrico r", "m"),
+        (13, "Colatitud θ = 90° − |φ|", "°"),
+        (14, "Factor central kM/r", "J/kg"),
+    ]
+    for rr, label, unit in geom:
+        resumen.cell(rr, 1, label); resumen.cell(rr, 3, unit)
+        _style_value_cell(resumen.cell(rr, 1), bold=True, fill=FILL_SOFT)
+        _style_value_cell(resumen.cell(rr, 2), "0.0000", align="right")
+        _style_value_cell(resumen.cell(rr, 3), fill=FILL_SOFT, align="center")
+
+    _merge_label(resumen, "E10:H10", "COORDENADAS ECEF", FILL_GRAPHITE)
+    for rr, label in [(11, "X"), (12, "Y"), (13, "Z")]:
+        resumen.cell(rr, 5, label)
+        resumen.cell(rr, 7, "m")
+        _style_value_cell(resumen.cell(rr, 5), bold=True, fill=FILL_SOFT)
+        resumen.merge_cells(start_row=rr, start_column=6, end_row=rr, end_column=6)
+        _style_value_cell(resumen.cell(rr, 6), "0.0000", align="right")
+        _style_value_cell(resumen.cell(rr, 7), fill=FILL_SOFT, align="center")
+        _style_value_cell(resumen.cell(rr, 8), fill=FILL_PAPER)
+
+    _merge_label(resumen, "A17:D17", "APORTES AL POTENCIAL", FILL_MOSS)
+    headers = ["Aporte", "Factor", "Potencial [J/kg]", "Lectura física"]
+    for i, h in enumerate(headers, start=1):
+        resumen.cell(18, i, h)
+    _style_header_row(resumen, 18, 1, 4, FILL_GRAPHITE)
+    aporte_rows = [
+        (19, "C.E · Contribución esférica", "Término dominante + corrección A₂"),
+        (20, "C.A · Achatamiento", "Correcciones asociadas a A₃ y A₅"),
+        (21, "C.A.E · Asimetría ecuatorial", "Corrección asociada a A₄"),
+        (22, "TOTAL", "Suma de los tres aportes"),
+    ]
+    for rr, label, desc in aporte_rows:
+        resumen.cell(rr, 1, label); resumen.cell(rr, 4, desc)
+        for cc in range(1, 5):
+            _style_value_cell(resumen.cell(rr, cc), fill=FILL_CARD)
+        resumen.cell(rr, 1).font = LABEL_FONT if rr < 22 else Font(name="Aptos", size=10, bold=True, color=XL_WHITE)
+        if rr == 22:
+            for cc in range(1, 5):
+                resumen.cell(rr, cc).fill = FILL_CLAY
+                resumen.cell(rr, cc).font = Font(name="Aptos", size=10, bold=True, color=XL_WHITE)
+        resumen.cell(rr, 2).number_format = "0.0000000000E+00"
+        resumen.cell(rr, 3).number_format = "0.0000"
+        resumen.row_dimensions[rr].height = 34 if rr < 22 else 30
+
+    _merge_label(resumen, "F17:H17", "CORRECCIONES COMPARABLES", FILL_GOLD)
+    resumen["F18"] = "Componente"; resumen["G18"] = "J/kg"
+    _style_header_row(resumen, 18, 6, 7, FILL_GOLD)
+    for rr, label in [(19, "A₂ de C.E"), (20, "C.A"), (21, "C.A.E")]:
+        resumen.cell(rr, 6, label)
+        _style_value_cell(resumen.cell(rr, 6), fill=FILL_SOFT, bold=True)
+        _style_value_cell(resumen.cell(rr, 7), "0.0000", fill=FILL_CARD, align="right")
+
+    chart = BarChart()
+    chart.type = "bar"
+    chart.style = 10
+    chart.title = "Magnitud de correcciones"
+    chart.y_axis.title = "Componente"
+    chart.x_axis.title = "J/kg"
+    chart.height = 5.6
+    chart.width = 10.0
+    data = Reference(resumen, min_col=7, min_row=18, max_row=21)
+    cats = Reference(resumen, min_col=6, min_row=19, max_row=21)
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(cats)
+    chart.legend = None
+    try:
+        chart.series[0].graphicalProperties.solidFill = XL_CLAY
+    except Exception:
+        pass
+    resumen.add_chart(chart, "E24")
+
+    # ---------------- Desarrollo matemático ----------------
+    _set_sheet_canvas(desarrollo, 88)
+    desarrollo.sheet_properties.tabColor = XL_GOLD
+    for col, width in {"A": 26, "B": 74, "C": 16, "D": 16}.items():
+        desarrollo.column_dimensions[col].width = width
+    _title(desarrollo, "A1:D1", "Desarrollo matemático", "Ecuaciones del docente, sustitución numérica y resultado de cada aporte")
+    desarrollo.row_dimensions[1].height = 32
+
+    equations = [
+        (4, "Ecuación general", "V = (kM/r) · [C.E + C.A + C.A.E]"),
+        (7, "Contribución esférica · C.E", "C.E = 1 + (A₂/r²) · [1/3 − sen²φ]"),
+        (12, "Achatamiento · C.A", "C.A = (A₃/r³)·[(5/2)sen²φ − 3/2] + (A₅/r⁵)·[15/8 − (35/4)sen²φ + (63/8)sen⁴φ]·senφ"),
+        (18, "Asimetría ecuatorial · C.A.E", "C.A.E = (A₄/r⁴)·[3/35 + (1/7)sen²φ − (1/4)sen²(2φ)]"),
+    ]
+    for rr, label, equation in equations:
+        _merge_label(desarrollo, f"A{rr}:D{rr}", label, FILL_GRAPHITE if rr != 4 else FILL_MOSS)
+        desarrollo.merge_cells(start_row=rr+1, start_column=1, end_row=rr+1, end_column=4)
+        desarrollo.cell(rr+1, 1, equation)
+        desarrollo.cell(rr+1, 1).font = MATH_BOLD
+        desarrollo.cell(rr+1, 1).alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+        _paint(desarrollo, f"A{rr+1}:D{rr+1}", FILL_CARD)
+        desarrollo.cell(rr+1, 1).font = MATH_BOLD
+        desarrollo.row_dimensions[rr+1].height = 34
+
+    _merge_label(desarrollo, "A23:D23", "SUSTITUCIÓN NUMÉRICA DEL ÚLTIMO CÁLCULO", FILL_CLAY)
+    rows = [
+        (24, "C.E", "Registre un cálculo para ver la sustitución.", ""),
+        (26, "C.A", "Registre un cálculo para ver la sustitución.", ""),
+        (28, "C.A.E", "Registre un cálculo para ver la sustitución.", ""),
+        (30, "TOTAL", "Registre un cálculo para ver la sustitución.", ""),
+    ]
+    for rr, label, text, result in rows:
+        desarrollo.cell(rr, 1, label)
+        desarrollo.merge_cells(start_row=rr, start_column=2, end_row=rr, end_column=4)
+        desarrollo.cell(rr, 2, text)
+        _style_value_cell(desarrollo.cell(rr, 1), bold=True, fill=FILL_SOFT, align="center")
+        _paint(desarrollo, f"B{rr}:D{rr}", FILL_CARD)
+        desarrollo.cell(rr, 2).font = MATH_FONT
+        desarrollo.cell(rr, 2).alignment = Alignment(wrap_text=True, vertical="center")
+        desarrollo.row_dimensions[rr].height = 48 if rr != 30 else 58
+
+    desarrollo.merge_cells("A33:D36")
+    desarrollo["A33"] = "Resultado final pendiente"
+    desarrollo["A33"].font = BIG_RESULT_FONT
+    desarrollo["A33"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    _paint(desarrollo, "A33:D36", FILL_MOSS)
+    desarrollo["A33"].font = BIG_RESULT_FONT
+
+    desarrollo.merge_cells("A38:D40")
+    desarrollo["A38"] = (
+        "Nota: λ interviene en las coordenadas X e Y del punto, pero este modelo de potencial "
+        "zonal depende de φ, r y los coeficientes A₂, A₃, A₄ y A₅; por ello λ no cambia V."
+    )
+    desarrollo["A38"].font = SUBTITLE_FONT
+    desarrollo["A38"].alignment = Alignment(wrap_text=True, vertical="center")
+    _paint(desarrollo, "A38:D40", FILL_SOFT)
+    desarrollo["A38"].font = SUBTITLE_FONT
+
+    # ---------------- Historial ----------------
+    _set_sheet_canvas(hist, 90)
+    hist.sheet_properties.tabColor = XL_ROSE
+    widths = [16, 21, 12, 12, 14, 17, 18, 18, 18, 18]
+    for idx, width in enumerate(widths, start=1):
+        hist.column_dimensions[get_column_letter(idx)].width = width
+    hist.merge_cells("A1:J2")
+    hist["A1"] = "Historial de resultados"
+    hist["A1"].font = TITLE_FONT
+    hist["A1"].alignment = Alignment(vertical="center")
+    hist.row_dimensions[1].height = 26
+    hist.append([])  # row 3 spacer
+    headers = ["Resultado", "Fecha", "φ [°]", "λ [°]", "h [m]", "r [m]", "CE", "CA", "CAE", "V [J/kg]"]
+    for col, val in enumerate(headers, 1):
+        hist.cell(4, col, val)
+    _style_header_row(hist, 4, 1, 10, FILL_GRAPHITE)
+    hist.freeze_panes = "A5"
+    hist.auto_filter.ref = "A4:J4"
+    for row_data in history_rows:
+        hist.append(list(row_data))
+        _apply_history_row_style(hist, hist.max_row)
+    if history_rows:
+        hist.auto_filter.ref = f"A4:J{hist.max_row}"
+
+    # ---------------- Constantes ----------------
+    _set_sheet_canvas(const, 92)
+    const.sheet_properties.tabColor = XL_GRAPHITE
+    for col, width in {"A": 20, "B": 25, "C": 16, "D": 48}.items():
+        const.column_dimensions[col].width = width
+    _title(const, "A1:D1", "Constantes WGS84 y coeficientes", "Valores fijos utilizados por el modelo")
+    const.row_dimensions[1].height = 32
+    headers = ["Constante", "Valor", "Unidad", "Descripción"]
+    for col, val in enumerate(headers, 1):
+        const.cell(4, col, val)
+    _style_header_row(const, 4, 1, 4, FILL_GRAPHITE)
+    constants = [
+        ("a", MODEL.a, "m", "Semieje mayor WGS84"),
+        ("b", MODEL.b, "m", "Semieje menor WGS84"),
+        ("e²", MODEL.e2, "—", "Primera excentricidad al cuadrado"),
+        ("f", MODEL.f, "—", "Achatamiento geométrico"),
+        ("kM", MODEL.KM, "m³/s²", "Constante gravitacional por masa terrestre usada en el ejercicio"),
+        ("A₂", MODEL.A2, "m²", "Coeficiente de expansión, grado 2"),
+        ("A₃", MODEL.A3, "m³", "Coeficiente de expansión, grado 3"),
+        ("A₄", MODEL.A4, "m⁴", "Coeficiente de expansión, grado 4"),
+        ("A₅", MODEL.A5, "m⁵", "Coeficiente de expansión, grado 5"),
+    ]
+    for rr, row_data in enumerate(constants, start=5):
+        for cc, val in enumerate(row_data, start=1):
+            const.cell(rr, cc, val)
+            _style_value_cell(const.cell(rr, cc), fill=FILL_CARD)
+        const.cell(rr, 1).font = LABEL_FONT
+        const.cell(rr, 2).number_format = "0.0000000000E+00" if abs(float(row_data[1])) >= 1e9 else "0.0000000000"
+        const.cell(rr, 4).alignment = Alignment(wrap_text=True, vertical="center")
+    const.freeze_panes = "A5"
+
+    wb.active = 0
+    return wb
+
+
+def _legacy_history_rows(path: Path):
+    """Read history from an older workbook so upgrading the design does not lose records."""
+    if not path.exists():
+        return []
+    try:
+        old = load_workbook(path, data_only=False)
+        if "Historial" not in old.sheetnames:
+            return []
+        ws = old["Historial"]
+        start_row = 5 if ws["A4"].value == "Resultado" else 2
+        rows = []
+        for row in ws.iter_rows(min_row=start_row, max_col=10, values_only=True):
+            if row[0]:
+                rows.append(row[:10])
+        return rows
+    except Exception:
+        return []
 
 
 def ensure_workbook():
-    if EXCEL_PATH.exists():
-        return
+    """Create the premium workbook or upgrade a legacy workbook while preserving history."""
+    with WORKBOOK_LOCK:
+        if EXCEL_PATH.exists():
+            try:
+                wb = load_workbook(EXCEL_PATH, read_only=True)
+                is_premium = all(name in wb.sheetnames for name in PREMIUM_SHEETS) and wb["Portada"]["B2"].value == "GeoPotencial 6"
+                wb.close()
+                if is_premium:
+                    return
+            except Exception:
+                pass
+        history = _legacy_history_rows(EXCEL_PATH)
+        wb = _build_premium_workbook(history)
+        wb.save(EXCEL_PATH)
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "Resumen"
-    ws.append(["GeoPotencial 6", "Prestige Web Edition"])
-    ws.append(["Equipo", " · ".join(AUTHORS)])
-    ws.append(["Modelo", "WGS84"])
-    ws.append(["Ecuación", "V = (kM/r) [CE + CA + CAE]"])
 
-    hist = wb.create_sheet("Historial")
-    hist.append(["Resultado", "Fecha", "φ [°]", "λ [°]", "h [m]", "r [m]", "CE", "CA", "CAE", "V [J/kg]"])
-    for c in hist[1]:
-        c.fill = HEAD_FILL
-        c.font = WHITE_FONT
-        c.alignment = Alignment(horizontal="center")
+def _update_latest_result_sheets(wb, r: Result):
+    """Refresh Portada, Resumen and Desarrollo matemático with the latest calculation."""
+    payload = result_payload(r)
 
-    const = wb.create_sheet("Constantes WGS84")
-    const.append(["Constante", "Valor", "Unidad"])
-    for item in [
-        ("a", MODEL.a, "m"), ("b", MODEL.b, "m"), ("e²", MODEL.e2, "—"),
-        ("f", MODEL.f, "—"), ("kM", MODEL.KM, "m³/s²"), ("A₂", MODEL.A2, "m²"),
-        ("A₃", MODEL.A3, "m³"), ("A₄", MODEL.A4, "m⁴"), ("A₅", MODEL.A5, "m⁵"),
-    ]:
-        const.append(item)
+    # Portada
+    portada = wb["Portada"]
+    portada["B21"] = f"V = {r.V_total:.4f} J/kg\nφ = {r.phi_deg:.4f}°   ·   λ = {r.lam_deg:.4f}°   ·   h = {r.h:.4f} m"
+    portada["B21"].font = BIG_RESULT_FONT
+    portada["B21"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    for wsx in wb.worksheets:
-        for col in range(1, wsx.max_column + 1):
-            wsx.column_dimensions[get_column_letter(col)].width = 22
-        for row in wsx.iter_rows():
-            for c in row:
-                c.border = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
+    # Resumen
+    ws = wb["Resumen"]
+    ws["B5"] = r.phi_deg; ws["B6"] = r.lam_deg; ws["B7"] = r.h
+    ws["E5"] = f"V = {r.V_total:.4f} J/kg"
+    ws["E5"].font = BIG_RESULT_FONT
+    ws["E5"].alignment = Alignment(horizontal="center", vertical="center")
+    ws["B11"] = r.N; ws["B12"] = r.r; ws["B13"] = r.theta_deg; ws["B14"] = r.KM_over_r
+    ws["F11"] = r.X; ws["F12"] = r.Y; ws["F13"] = r.Z
+    for cell in ["B5", "B6", "B7", "B11", "B12", "B13", "B14", "F11", "F12", "F13"]:
+        ws[cell].number_format = "0.0000"
+    values = [
+        (19, r.CE, r.V_CE),
+        (20, r.CA, r.V_CA),
+        (21, r.CAE, r.V_CAE),
+        (22, None, r.V_total),
+    ]
+    for rr, factor, pot in values:
+        ws.cell(rr, 2, factor if factor is not None else "—")
+        ws.cell(rr, 3, pot)
+        ws.cell(rr, 3).number_format = "0.0000"
+        if factor is not None:
+            ws.cell(rr, 2).number_format = "0.0000000000E+00"
+    ws["G19"] = r.V_CE - r.KM_over_r
+    ws["G20"] = r.V_CA
+    ws["G21"] = r.V_CAE
+    for c in ("G19", "G20", "G21"):
+        ws[c].number_format = "0.0000"
 
-    wb.save(EXCEL_PATH)
+    # Desarrollo matemático
+    dev = wb["Desarrollo matemático"]
+    dev["B24"] = payload["substitutions"]["CE"] + f"\nV_CE = (kM/r)·CE = {r.V_CE:.4f} J/kg"
+    dev["B26"] = payload["substitutions"]["CA"] + f"\nV_CA = (kM/r)·CA = {r.V_CA:.4f} J/kg"
+    dev["B28"] = payload["substitutions"]["CAE"] + f"\nV_CAE = (kM/r)·CAE = {r.V_CAE:.4f} J/kg"
+    dev["B30"] = payload["substitutions"]["TOTAL"]
+    for cell in ("B24", "B26", "B28", "B30"):
+        dev[cell].font = MATH_FONT
+        dev[cell].alignment = Alignment(wrap_text=True, vertical="center")
+    dev["A33"] = (
+        f"V = {r.V_total:.4f} J/kg\n"
+        f"C.E = {r.V_CE:.4f} J/kg   ·   C.A = {r.V_CA:.4f} J/kg   ·   C.A.E = {r.V_CAE:.4f} J/kg"
+    )
+    dev["A33"].font = BIG_RESULT_FONT
+    dev["A33"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
 def register_result(r: Result) -> int:
@@ -242,23 +695,23 @@ def register_result(r: Result) -> int:
     with WORKBOOK_LOCK:
         wb = load_workbook(EXCEL_PATH)
         hist = wb["Historial"]
-        n = hist.max_row
-        hist.append([
-            f"Resultado {n}",
-            datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-            round(r.phi_deg, 4),
-            round(r.lam_deg, 4),
-            round(r.h, 4),
-            round(r.r, 4),
-            round(r.CE, 10),
-            r.CA,
-            r.CAE,
-            round(r.V_total, 4),
-        ])
-        for c in hist[hist.max_row]:
-            c.border = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)
-            if c.column in (3, 4, 5, 6, 10):
-                c.number_format = "0.0000"
+        # Header is on row 4 in the premium workbook.
+        existing = max(0, hist.max_row - 4)
+        n = existing + 1
+        row = hist.max_row + 1
+        hist.cell(row, 1, f"Resultado {n}")
+        hist.cell(row, 2, datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+        hist.cell(row, 3, round(r.phi_deg, 4))
+        hist.cell(row, 4, round(r.lam_deg, 4))
+        hist.cell(row, 5, round(r.h, 4))
+        hist.cell(row, 6, round(r.r, 4))
+        hist.cell(row, 7, r.CE)
+        hist.cell(row, 8, r.CA)
+        hist.cell(row, 9, r.CAE)
+        hist.cell(row, 10, round(r.V_total, 4))
+        _apply_history_row_style(hist, row)
+        hist.auto_filter.ref = f"A4:J{hist.max_row}"
+        _update_latest_result_sheets(wb, r)
         wb.save(EXCEL_PATH)
     return n
 
@@ -269,7 +722,7 @@ def read_history(limit=100):
         wb = load_workbook(EXCEL_PATH, data_only=True)
         hist = wb["Historial"]
         rows = []
-        for row in hist.iter_rows(min_row=2, values_only=True):
+        for row in hist.iter_rows(min_row=5, values_only=True):
             if not row[0]:
                 continue
             rows.append({
@@ -278,7 +731,6 @@ def read_history(limit=100):
                 "CAE": row[8], "V": row[9],
             })
     return list(reversed(rows[-limit:]))
-
 
 
 # ----------------------------- Gráficas -------------------------------
