@@ -23,7 +23,12 @@ from plotly.offline import get_plotlyjs
 
 APP_NAME = "GeoPotencial 6"
 APP_VERSION = "6.0 · PRESTIGE WEB EDITION"
-AUTHORS = ["Laura Vargas", "Michael", "Stephany Vega"]
+TEAM = [
+    {"name": "Laura Vargas", "student_code": "20241025003", "list_code": "27"},
+    {"name": "Michael Ramirez", "student_code": "20232025071", "list_code": "29"},
+    {"name": "Stephany Vega", "student_code": "20241025033", "list_code": "28"},
+]
+AUTHORS = [member["name"] for member in TEAM]
 
 RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
 BASE_DIR = Path(__file__).resolve().parent
@@ -352,8 +357,12 @@ def _build_premium_workbook(history_rows=None):
     portada["B9"].font = Font(name="Cambria Math", size=18, bold=True, color=XL_INK)
 
     _merge_label(portada, "B13:G13", "INFORMACIÓN DEL PROYECTO", FILL_GRAPHITE)
+    team_text = " | ".join(
+        f'{m["name"]} — Código {m["student_code"]} — Lista {m["list_code"]}'
+        for m in TEAM
+    )
     info = [
-        ("Equipo", " · ".join(AUTHORS)),
+        ("Integrantes", team_text),
         ("Modelo de referencia", "WGS84"),
         ("Magnitud calculada", "Potencial gravitacional terrestre"),
         ("Unidad final", "J/kg (equivalente a m²/s²)"),
@@ -369,6 +378,8 @@ def _build_premium_workbook(history_rows=None):
         portada.cell(i, 4).font = VALUE_FONT
         portada.cell(i, 2).alignment = Alignment(vertical="center")
         portada.cell(i, 4).alignment = Alignment(vertical="center", wrap_text=True)
+        if i == 14:
+            portada.row_dimensions[i].height = 44
 
     _merge_label(portada, "B20:G20", "RESULTADO MÁS RECIENTE", FILL_CLAY)
     portada.merge_cells("B21:G24")
@@ -779,7 +790,7 @@ def graph_profile(r):
 
 def graph_contributions(r):
     """
-    Visualización clara de los tres aportes correctivos.
+    Visualización comparativa de las correcciones armónicas del modelo.
     - Fila 1: resumen en barras del punto actual.
     - Filas 2-4: evolución con la latitud, cada panel con su propia escala.
     Se muestra la corrección A2 de C.E respecto al término central kM/r,
@@ -869,7 +880,7 @@ def graph_contributions(r):
         font=dict(family="Segoe UI, Arial", color=INK),
         margin=dict(l=68, r=40, t=95, b=60),
         title=dict(
-            text="Aportes correctivos al potencial",
+            text="Correcciones armónicas por latitud",
             x=.02, xanchor="left",
             font=dict(size=20)
         ),
@@ -896,7 +907,7 @@ def graph_contributions(r):
     fig.update_yaxes(title="J/kg", gridcolor=GRID, row=1, col=1)
 
     fig.add_annotation(
-        text="Nota: en C.E se grafica solo la corrección A₂; el término central kM/r se analiza por separado.",
+        text="Comparación de términos correctivos: en C.E se muestra únicamente A₂; el término central kM/r no se incluye para evitar ocultar C.A y C.A.E por diferencia de escala.",
         xref="paper", yref="paper", x=0.0, y=1.03,
         showarrow=False, align="left",
         font=dict(size=11, color=SLATE),
@@ -1163,7 +1174,12 @@ body{{margin:0;background:#F7F2EC;color:#2C2926;font-family:Segoe UI,Arial,sans-
 .total{{background:#59624E;color:white;padding:24px;border-radius:20px;font-size:28px;font-weight:800}}
 table{{width:100%;border-collapse:collapse;background:#FFFDFC}} th,td{{padding:12px;border-bottom:1px solid #E1D8D0;text-align:left}} th{{background:#3F3A36;color:white}}
 </style><script>{plotly_js}</script></head><body><div class="wrap">
-<div class="hero"><div class="eyebrow">GEODESIA FÍSICA · WGS84 · INFORME CIENTÍFICO</div><h1>GeoPotencial 6</h1><div>Potencial gravitacional de la Tierra por aportes</div><p>{' · '.join(AUTHORS)}</p></div>
+<div class="hero"><div class="eyebrow">GEODESIA FÍSICA · WGS84 · INFORME CIENTÍFICO</div><h1>GeoPotencial 6</h1><div>Potencial gravitacional de la Tierra por aportes</div><p>{' · '.join(AUTHORS)}</p>
+<div style="margin-top:8px;font-size:13px;opacity:.88">
+  Laura Vargas · 20241025003 · Lista 27 &nbsp;|&nbsp;
+  Michael Ramirez · 20232025071 · Lista 29 &nbsp;|&nbsp;
+  Stephany Vega · 20241025033 · Lista 28
+</div></div>
 <div class="section grid">
 <div class="card"><small>φ</small><h3>{r.phi_deg:.4f}°</h3></div>
 <div class="card"><small>λ</small><h3>{r.lam_deg:.4f}°</h3></div>

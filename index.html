@@ -3936,6 +3936,102 @@ label{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bot
 .toast{position:fixed;bottom:26px;right:26px;display:none;background:var(--graphite);color:white;padding:14px 18px;border-radius:14px;box-shadow:var(--shadow);z-index:99}
 @media(max-width:1050px){.hero{grid-template-columns:1fr}.hero-art{min-height:390px}.hero-copy{padding:50px 36px 20px}.hero h1{font-size:58px}.grid2,.graph-layout{grid-template-columns:1fr}.grid4{grid-template-columns:1fr 1fr}.graph-menu{position:static}nav{display:none}}
 </style>
+
+<style id="mobile-responsive-v2">
+/* Responsive añadido sin modificar la composición de escritorio (>1050 px). */
+.team-details{display:flex;gap:14px;flex-wrap:wrap}
+.team-details>div{display:flex;flex-direction:column;gap:2px;padding-right:14px;border-right:1px solid rgba(255,255,255,.16)}
+.team-details>div:last-child{border-right:0}
+.team-details strong{color:#F5ECE4;font-size:13px}
+.team-details span{color:#CFC5BC;font-size:11px}
+
+@media (max-width:1050px){
+  .topbar{
+    height:auto;
+    min-height:74px;
+    padding:10px 18px;
+    gap:8px 14px;
+    flex-wrap:wrap;
+  }
+  .brand{order:1}
+  .status-pill{order:2;margin-left:auto;white-space:nowrap}
+  nav{
+    order:3;
+    display:flex !important;
+    width:100%;
+    overflow-x:auto;
+    gap:4px;
+    padding:2px 0 4px;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  nav::-webkit-scrollbar{display:none}
+  nav button{flex:0 0 auto;white-space:nowrap;padding:9px 12px}
+  .container{padding:24px 18px}
+  .hero{min-height:auto}
+  .hero-art{min-height:360px}
+  .hero-copy{padding:42px 30px 22px}
+  .hero h1{font-size:56px}
+  .form-grid{grid-template-columns:1fr 1fr}
+  .grid3{grid-template-columns:repeat(2,1fr)}
+  .export-cards{grid-template-columns:1fr}
+  .graph-box{min-height:560px;padding:14px}
+  #graph{height:540px !important;min-height:540px}
+  .history-table{min-width:760px}
+  .card{overflow-x:auto}
+}
+
+@media (max-width:700px){
+  body{overflow-x:hidden}
+  .topbar{padding:9px 12px}
+  .brand{font-size:17px}
+  .brandmark{width:32px;height:32px}
+  .status-pill{font-size:10px;padding:8px 10px;max-width:48vw;overflow:hidden;text-overflow:ellipsis}
+  nav button{font-size:12px;padding:8px 10px}
+  .container{padding:16px 12px 24px}
+  .hero{border-radius:22px}
+  .hero-copy{padding:34px 20px 20px}
+  .hero h1{font-size:44px;margin:14px 0 16px}
+  .hero p{font-size:16px;line-height:1.55}
+  .hero-actions{display:grid;grid-template-columns:1fr;gap:9px}
+  .hero-actions .btn{width:100%}
+  .hero-meta{gap:8px 12px;margin-top:22px;font-size:11px}
+  .team-details{display:grid;grid-template-columns:1fr;gap:7px;padding-top:17px}
+  .team-details>div{border-right:0;border-left:2px solid rgba(231,216,200,.22);padding-left:9px}
+  .hero-art{min-height:300px;overflow:hidden}
+  .o1,.r1{width:390px;height:270px}
+  .o2,.r2{width:330px;height:225px}
+  .o3,.r3{width:280px;height:190px}
+  .planet{width:205px;height:165px}
+  .section-head{align-items:flex-start;gap:12px;flex-direction:column}
+  .section-head h2{font-size:28px}
+  .card{border-radius:18px;padding:16px}
+  .grid2,.grid3,.grid4,.form-grid{grid-template-columns:1fr !important}
+  .kpi{padding:15px}
+  .kpi b{font-size:19px}
+  .total-box{padding:20px;border-radius:18px}
+  .total-box strong{font-size:25px;overflow-wrap:anywhere}
+  .result-table{min-width:520px}
+  .math-card{padding:17px}
+  .formula{font-size:17px;overflow-wrap:anywhere}
+  .tabs{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .tabs button{padding:10px 8px}
+  .graph-choice{text-align:center;background:#F7F1EA;margin:5px 0}
+  .graph-menu{padding:14px}
+  .graph-box{padding:4px;min-height:470px}
+  #graph{height:465px !important;min-height:465px}
+  .export-card{min-height:175px}
+  .toast{left:12px;right:12px;bottom:14px;text-align:center}
+}
+
+@media (max-width:390px){
+  .status-pill{display:none}
+  .hero h1{font-size:39px}
+  .hero-art{min-height:270px}
+  #graph{height:430px !important;min-height:430px}
+}
+</style>
+
 </head>
 <body>
 <header class="topbar">
@@ -3950,7 +4046,11 @@ label{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bot
 <section id="home" class="page active"><div class="container"><div class="hero">
 <div class="hero-copy"><div class="eyebrow">Geodesia Física · WGS84 · Scientific Prestige</div><h1>Geo<span>Potencial</span></h1><p>Una lectura visual, matemática y trazable del potencial gravitacional terrestre por aportes: contribución esférica, achatamiento y asimetría ecuatorial.</p>
 <div class="hero-actions"><button class="btn btn-primary" onclick="go('calculo')">Comenzar cálculo</button><button class="btn btn-secondary" onclick="go('graficas')">Explorar gráficas</button></div>
-<div class="hero-meta"><span>● Modelo WGS84</span><span>● Excel automático</span><span>● HTML interactivo</span><span>● 2D + 3D</span><span>● Acceso web</span></div><div class="team">Laura Vargas · Michael · Stephany Vega</div></div>
+<div class="hero-meta"><span>● Modelo WGS84</span><span>● Excel automático</span><span>● HTML interactivo</span><span>● 2D + 3D</span><span>● Acceso web</span></div><div class="team team-details">
+      <div><strong>Laura Vargas</strong><span>20241025003 · Lista 27</span></div>
+      <div><strong>Michael Ramirez</strong><span>20232025071 · Lista 29</span></div>
+      <div><strong>Stephany Vega</strong><span>20241025033 · Lista 28</span></div>
+    </div></div>
 <div class="hero-art"><div class="potential-ring r1"></div><div class="potential-ring r2"></div><div class="potential-ring r3"></div><div class="orbit o1"></div><div class="orbit o2"></div><div class="orbit o3"></div><div class="planet"><div class="point-p"></div></div></div>
 </div></div></section>
 
@@ -3984,9 +4084,9 @@ label{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bot
 <section id="graficas" class="page"><div class="container"><div class="section-head"><div><h2>Gráficas</h2><p>Análisis 2D y 3D del potencial y sus aportes.</p></div></div>
 <div class="graph-layout"><div class="card graph-menu">
 <div class="tabs"><button id="tab2d" class="active" onclick="setGraphMode('2d')">2D</button><button id="tab3d" onclick="setGraphMode('3d')">3D</button></div>
-<div id="choices2d"><button class="graph-choice active" onclick="loadGraph('profile',this)">Perfil V(|φ|)</button><button class="graph-choice" onclick="loadGraph('contributions',this)">Aportes vs latitud</button><button class="graph-choice" onclick="loadGraph('height',this)">Potencial vs altura</button></div>
+<div id="choices2d"><button class="graph-choice active" onclick="loadGraph('profile',this)">Perfil V(|φ|)</button><button class="graph-choice" onclick="loadGraph('contributions',this)">Correcciones por latitud</button><button class="graph-choice" onclick="loadGraph('height',this)">Potencial vs altura</button></div>
 <div id="choices3d" style="display:none"><button class="graph-choice" onclick="loadGraph('ellipsoid',this)">Elipsoide coloreado por V</button><button class="graph-choice" onclick="loadGraph('surface',this)">Superficie V(|φ|, h)</button><button class="graph-choice" onclick="loadGraph('shapes',this)">Forma 3D de cada aporte</button></div>
-<div style="margin-top:18px;color:var(--muted);font-size:13px">2D: perfil, aportes y altura. 3D: elipsoide, superficie V(φ,h) y forma armónica de los aportes.</div>
+<div style="margin-top:18px;color:var(--muted);font-size:13px">2D: perfil, correcciones armónicas y altura. 3D: elipsoide, superficie V(φ,h) y forma armónica de las contribuciones.</div>
 </div><div class="card graph-box"><div id="graph" style="width:100%;height:650px"></div></div></div>
 </div></section>
 
@@ -4025,5 +4125,19 @@ async function openFolder(){
     }
 calculate();
 </script>
+
+<script id="mobile-plotly-resize-v2">
+(function(){
+  function resizeGeoPlot(){
+    const g=document.getElementById('graph');
+    if(g && window.Plotly && g.data){
+      try{ Plotly.Plots.resize(g); }catch(e){}
+    }
+  }
+  window.addEventListener('resize', ()=>setTimeout(resizeGeoPlot,120));
+  window.addEventListener('orientationchange', ()=>setTimeout(resizeGeoPlot,260));
+})();
+</script>
+
 </body>
 </html>
