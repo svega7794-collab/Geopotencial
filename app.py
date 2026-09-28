@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import sys
+import textwrap
 import os
 import threading
 import time
@@ -769,411 +770,529 @@ def base_layout(title):
     )
 
 
-def graph_profile(r):
-    xs = np.linspace(0, 90, 181)
-    ys = [calculate_model(float(x), r.lam_deg, r.h).V_total for x in xs]
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=xs, y=ys, mode="lines", line=dict(color=MOSS, width=3),
-        fill="tozeroy", fillcolor="rgba(89,98,78,.12)", name="V total"
-    ))
-    fig.add_trace(go.Scatter(
-        x=[abs(r.phi_deg)], y=[r.V_total], mode="markers",
-        marker=dict(size=11, color=CLAY, line=dict(color="white", width=2)),
-        name="Punto actual"
-    ))
-    fig.update_layout(**base_layout("Perfil del potencial V(|φ|)"))
-    fig.update_xaxes(title="|φ| [°]", range=[0, 90])
-    fig.update_yaxes(title="V [J/kg]")
+ACCENT = "#2F6F8F"      # azul petróleo para líneas de referencia
+G_REF = 9.80665          # gravedad de referencia, solo para expresar J/kg como metros
+
+
+# ---------- utilidades comunes de las gráficas ----------
+
+def _v(x: float, dec: int = 2) -> str:
+    """Número con separador de miles por espacio (62 440 001.43)."""
+    return f"{x:,.{dec}f}".replace(",", " ").replace("-", "−")
+
+
+def _pct(p: float) -> str:
+    """Porcentaje legible sin notación científica (0.000074 %)."""
+    return np.format_float_positional(p, precision=3 if p < 1 else 4, fractional=p >= 1, trim="-") + " %"
+
+
+def _padding_y(fig, ys, fila=None, abajo=.12, arriba=.22):
+    lo, hi = float(np.min(ys)), float(np.max(ys))
+    span = (hi - lo) or abs(hi) or 1.0
+    kw = dict(row=fila, col=1) if fila else {}
+    fig.update_yaxes(range=[lo - abajo * span, hi + arriba * span], **kw)
+
+
+def _lat_txt(phi: float) -> str:
+    return f"{abs(phi):.4f}° {'N' if phi >= 0 else 'S'}"
+
+
+def _wrap(texto: str, ancho: int = 140) -> str:
+    """Parte un párrafo en líneas para Plotly (que no ajusta texto solo)."""
+    lineas = []
+    for parrafo in texto.split("\n"):
+        lineas.extend(textwrap.wrap(parrafo, ancho) or [""])
+    return "<br>".join(lineas)
+
+
+def _bloque_explicacion(texto: str, ancho: int = 140) -> tuple[str, int]:
+    """Devuelve el texto listo para anotación y la altura en px que ocupa."""
+    cuerpo = _wrap(texto, ancho)
+    n = cuerpo.count("<br>") + 2
+    return "<b>¿Qué muestra esta gráfica?</b><br>" + cuerpo, 18 * n + 26
+
+
+def _agregar_explicacion(fig, texto: str, alto_figura: int, espacio_ejes: int = 58, ancho: int = 140):
+    """Agrega la explicación como un recuadro bajo la gráfica, dentro de la misma figura."""
+    contenido, alto_txt = _bloque_explicacion(texto, ancho)
+    fig.add_annotation(
+        text=contenido, xref="paper", yref="paper", x=0, y=0,
+        xanchor="left", yanchor="top", yshift=-espacio_ejes, showarrow=False, align="left",
+        font=dict(size=12.5, color=INK), bgcolor="#FFFDFC", bordercolor=GRID, borderwidth=1, borderpad=10,
+    )
+    fig.update_layout(height=alto_figura + alto_txt, margin=dict(b=espacio_ejes + alto_txt + 12))
     return fig
 
+
+def _cruces_cero(xs, ys):
+    """Latitudes (interpoladas) donde una curva cambia de signo."""
+    out = []
+    for i in range(len(xs) - 1):
+        if ys[i] == 0:
+            out.append(float(xs[i]))
+        elif ys[i] * ys[i + 1] < 0:
+            out.append(float(xs[i] - ys[i] * (xs[i + 1] - xs[i]) / (ys[i + 1] - ys[i])))
+    return out
+
+
+def _barrido_latitud(r, n=361):
+    """Evalúa el modelo de −90° a 90° con la misma λ y h del punto P."""
+    xs = np.linspace(-90, 90, n)
+    filas = [calculate_model(float(x), r.lam_deg, r.h) for x in xs]
+    return xs, filas
+
+
+def _gradiente_vertical(phi, lam, h, dh=1.0):
+    """dV/dh numérico (J/kg por metro = m/s²)."""
+    h1 = h - dh if h - dh >= -1000 else h
+    h2 = h + dh if h + dh <= 1_000_000 else h
+    v1 = calculate_model(phi, lam, h1).V_total
+    v2 = calculate_model(phi, lam, h2).V_total
+    return (v2 - v1) / (h2 - h1)
+
+
+# ---------- 1. Perfil del potencial total por latitud ----------
+
+def graph_profile(r):
+    xs, filas = _barrido_latitud(r)
+    ys = np.array([f.V_total for f in filas])
+    i_eq = int(np.argmin(np.abs(xs)))
+    v_eq, v_n, v_s = ys[i_eq], ys[-1], ys[0]
+    dif_p = r.V_total - v_eq
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, mode="lines", line=dict(color=MOSS, width=3), name="V total a la altura de P",
+        fill="tozeroy", fillcolor="rgba(89,98,78,.10)",
+        hovertemplate="φ = %{x:.1f}°<br>V = %{y:,.2f} J/kg<extra></extra>",
+    ))
+    fig.add_hline(y=r.V_total, line_dash="dot", line_color=ROSE, opacity=.9)
+    fig.add_trace(go.Scatter(
+        x=[0, 90, -90], y=[v_eq, v_n, v_s], mode="markers+text", name="Ecuador y polos",
+        marker=dict(size=8, color=SLATE), text=["Ecuador", "Polo N", "Polo S"],
+        textposition=["top center", "bottom left", "bottom right"], textfont=dict(size=11, color=SLATE),
+        hovertemplate="%{text}<br>V = %{y:,.2f} J/kg<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=[r.phi_deg], y=[r.V_total], mode="markers", name="Punto P",
+        marker=dict(size=13, color=CLAY, line=dict(color="white", width=2)),
+        hovertemplate=f"Punto P<br>φ = {_lat_txt(r.phi_deg)}<br>V = %{{y:,.3f}} J/kg<extra></extra>",
+    ))
+    rango = ys.max() - ys.min()
+    fig.update_layout(**base_layout(f"¿Cómo cambia V con la latitud?  ·  h = {_v(r.h, 1)} m, λ = {_v(r.lam_deg, 4)}°"))
+    fig.update_layout(separators=". ", legend=dict(orientation="h", x=.5, xanchor="center", y=.99, yanchor="top",
+                                                   bgcolor="rgba(255,253,252,.85)"))
+    fig.update_xaxes(title="Latitud φ [°]  (negativo = Sur)", range=[-90, 90],
+                     tickvals=[-90, -60, -30, 0, 30, 60, 90])
+    fig.update_yaxes(title="V [J/kg]", tickformat=",.0f",
+                     range=[ys.min() - .12 * rango, ys.max() + .08 * rango])
+
+    texto = (
+        f"La curva da el potencial total V que tendría un punto con la misma altura (h = {_v(r.h, 1)} m) "
+        f"si se desplazara de polo a polo. V es mínimo en el ecuador ({_v(v_eq)} J/kg) y máximo en los polos "
+        f"(N: {_v(v_n)} J/kg; S: {_v(v_s)} J/kg): una diferencia de unos {_v(max(v_n, v_s) - v_eq, 0)} J/kg. "
+        f"La causa es el achatamiento: en los polos la superficie está más cerca del centro de la Tierra, r es menor "
+        f"y el término kM/r crece.\n"
+        f"El punto P ({_lat_txt(r.phi_deg)}) está {_v(dif_p)} J/kg por encima del valor en el ecuador, lo que equivale "
+        f"a unos {_v(dif_p / G_REF, 1)} m de altura (ΔV/g). La línea punteada une las latitudes con el mismo V que P."
+    )
+    return _agregar_explicacion(fig, texto, alto_figura=560)
+
+
+# ---------- 2. Peso de cada aporte y su variación con la latitud ----------
 
 def graph_contributions(r):
-    """
-    Visualización comparativa de las correcciones armónicas del modelo.
-    - Fila 1: resumen en barras del punto actual.
-    - Filas 2-4: evolución con la latitud, cada panel con su propia escala.
-    Se muestra la corrección A2 de C.E respecto al término central kM/r,
-    para que su escala sea comparable con C.A y C.A.E.
-    """
-    xs = np.linspace(-90, 90, 361)
-    ce_corr, ca_vals, cae_vals = [], [], []
-
-    for x in xs:
-        rr = calculate_model(float(x), r.lam_deg, r.h)
-        ce_corr.append(rr.V_CE - rr.KM_over_r)
-        ca_vals.append(rr.V_CA)
-        cae_vals.append(rr.V_CAE)
-
-    current_ce = r.V_CE - r.KM_over_r
-    current_vals = [current_ce, r.V_CA, r.V_CAE]
-    labels = ["A₂ de C.E", "C.A", "C.A.E"]
-    colors = [MOSS, CLAY, GOLD]
+    xs, filas = _barrido_latitud(r)
+    ce_corr = np.array([f.V_CE - f.KM_over_r for f in filas])
+    ca_vals = np.array([f.V_CA for f in filas])
+    cae_vals = np.array([f.V_CAE for f in filas])
+    corr_p = r.V_CE - r.KM_over_r
 
     fig = make_subplots(
-        rows=4, cols=1,
-        shared_xaxes=False,
-        vertical_spacing=0.08,
-        row_heights=[0.22, 0.26, 0.26, 0.26],
+        rows=4, cols=1, vertical_spacing=.085, row_heights=[.25, .25, .25, .25],
         subplot_titles=(
-            "Resumen de correcciones en el punto actual",
-            "Corrección A₂ de la contribución esférica",
-            "Achatamiento C.A (grados 3 y 5)",
-            "Asimetría ecuatorial C.A.E (grado 4)",
+            "1 · Peso de cada término en V para el punto P (escala logarítmica)",
+            "2 · Corrección A₂ de la contribución esférica C.E (grado 2)",
+            "3 · Achatamiento C.A (grados 3 y 5)",
+            "4 · Asimetría ecuatorial C.A.E (grado 4)",
         ),
     )
 
-    fig.add_trace(
-        go.Bar(
-            x=labels,
-            y=current_vals,
-            marker_color=colors,
-            text=[f"{v:.4f}" for v in current_vals],
-            textposition="outside",
-            hovertemplate="%{x}<br>%{y:.6f} J/kg<extra></extra>",
-            showlegend=False,
-        ),
-        row=1, col=1
-    )
+    # Panel 1: tamaño de cada término (el signo va en la etiqueta)
+    nombres = ["kM/r (Tierra esférica)", "A₂ de C.E", "C.A", "C.A.E"]
+    valores = [r.KM_over_r, corr_p, r.V_CA, r.V_CAE]
+    colores = [SLATE, MOSS, CLAY, GOLD]
+    etiquetas = [f"{'+' if v >= 0 else '−'}{_v(abs(v), 3 if abs(v) < 1e3 else 1)} J/kg  ·  "
+                 f"{_pct(abs(v) / r.V_total * 100)} de V" for v in valores]
+    fig.add_trace(go.Bar(
+        y=nombres, x=[max(abs(v), 1e-6) for v in valores], orientation="h", marker_color=colores,
+        text=etiquetas, textposition="outside", cliponaxis=False, showlegend=False,
+        customdata=valores, hovertemplate="%{y}<br>%{customdata:,.4f} J/kg<extra></extra>",
+    ), row=1, col=1)
+    fig.update_xaxes(type="log", range=[0, 10.3], title="|aporte| [J/kg]  (cada división = ×10)",
+                     gridcolor=GRID, row=1, col=1)
+    fig.update_yaxes(autorange="reversed", row=1, col=1)
+    fig.update_xaxes(zeroline=False, row=1, col=1)
 
-    series = [
-        (ce_corr, MOSS, current_ce),
-        (ca_vals, CLAY, r.V_CA),
-        (cae_vals, GOLD, r.V_CAE),
-    ]
-
-    for row, (ys, color, current_y) in enumerate(series, start=2):
-        fig.add_trace(
-            go.Scatter(
-                x=xs, y=ys,
-                mode="lines",
-                line=dict(color=color, width=2.8),
-                fill="tozeroy",
-                fillcolor=color.replace("#", "rgba(") if False else None,
-                showlegend=False,
-                hovertemplate="φ=%{x:.1f}°<br>Aporte=%{y:.6f} J/kg<extra></extra>",
-            ),
-            row=row, col=1
-        )
-        fig.add_trace(
-            go.Scatter(
-                x=[r.phi_deg], y=[current_y],
-                mode="markers",
-                marker=dict(size=10, color=ROSE, line=dict(color="white", width=1.8)),
-                showlegend=False,
-                hovertemplate="Punto actual<br>φ=%{x:.4f}°<br>%{y:.6f} J/kg<extra></extra>",
-            ),
-            row=row, col=1
-        )
-        fig.add_vline(
-            x=r.phi_deg,
-            line_dash="dot",
-            line_color=ROSE,
-            opacity=.75,
-            row=row, col=1
-        )
+    series = [(ce_corr, MOSS, corr_p), (ca_vals, CLAY, r.V_CA), (cae_vals, GOLD, r.V_CAE)]
+    for fila, (ys, color, actual) in enumerate(series, start=2):
+        fig.add_trace(go.Scatter(
+            x=xs, y=ys, mode="lines", line=dict(color=color, width=2.8), showlegend=False,
+            hovertemplate="φ = %{x:.1f}°<br>%{y:,.3f} J/kg<extra></extra>",
+        ), row=fila, col=1)
+        for x0 in _cruces_cero(xs, ys):
+            fig.add_vline(x=x0, line_color=SLATE, line_width=1, opacity=.35, row=fila, col=1)
+        fig.add_vline(x=r.phi_deg, line_dash="dot", line_color=ROSE, opacity=.8, row=fila, col=1)
+        fig.add_trace(go.Scatter(
+            x=[r.phi_deg], y=[actual], mode="markers+text", showlegend=False,
+            text=[f"P: {_v(actual, 3)}"], textposition="top right", textfont=dict(size=11, color=INK),
+            marker=dict(size=10, color=ROSE, line=dict(color="white", width=1.8)),
+            hovertemplate="Punto P<br>%{y:,.4f} J/kg<extra></extra>",
+        ), row=fila, col=1)
+        fig.update_xaxes(range=[-90, 90], tickvals=[-90, -60, -30, 0, 30, 60, 90], gridcolor=GRID,
+                         zeroline=False, row=fila, col=1)
+        _padding_y(fig, ys, fila)
+        fig.update_yaxes(title="J/kg", gridcolor=GRID, zeroline=True, zerolinecolor="#9C928A",
+                         zerolinewidth=1.5, tickformat=",.0f" if fila == 2 else ",.1f", row=fila, col=1)
+    fig.update_xaxes(title="Latitud φ [°]", row=4, col=1)
 
     fig.update_layout(
-        height=940,
-        paper_bgcolor=PAPER,
-        plot_bgcolor=PAPER,
+        paper_bgcolor=PAPER, plot_bgcolor=PAPER, separators=". ",
         font=dict(family="Segoe UI, Arial", color=INK),
-        # Más espacio arriba y abajo para evitar solapamientos de textos.
-        margin=dict(l=68, r=40, t=145, b=105),
-        title=dict(
-            text="Correcciones armónicas por latitud",
-            x=.02, xanchor="left",
-            y=.985, yanchor="top",
-            font=dict(size=20)
-        ),
-        bargap=.48,
+        title=dict(text="¿De qué está hecho V? Aportes del modelo en el punto P y según la latitud",
+                   x=.02, xanchor="left", font=dict(size=19)),
+        margin=dict(l=175, r=40, t=95),
         showlegend=False,
     )
+    for anot in fig.layout.annotations:  # títulos de los paneles alineados a la izquierda
+        anot.update(x=0, xanchor="left", font=dict(size=13.5, color=INK))
 
-    # Los títulos automáticos de los subgráficos quedan demasiado cerca
-    # del título principal en Plotly. Bajamos únicamente el primero.
-    if fig.layout.annotations:
-        fig.layout.annotations[0].update(yshift=-34)
-
-    for rr in range(2, 5):
-        fig.update_xaxes(
-            range=[-90, 90],
-            tickvals=[-90, -60, -30, 0, 30, 60, 90],
-            gridcolor=GRID,
-            zerolinecolor=GRID,
-            row=rr, col=1
-        )
-        fig.update_yaxes(
-            title="J/kg",
-            gridcolor=GRID,
-            zerolinecolor=GRID,
-            row=rr, col=1
-        )
-
-    fig.update_xaxes(title="Latitud φ [°]", row=4, col=1)
-    fig.update_yaxes(title="J/kg", gridcolor=GRID, row=1, col=1)
-
-    fig.add_annotation(
-        text=(
-            "Nota de lectura: en C.E se representa solo la corrección A₂. "
-            "El término central kM/r se deja fuera de esta comparación para que "
-            "C.A y C.A.E puedan apreciarse pese a la diferencia de escala."
-        ),
-        xref="paper", yref="paper",
-        x=0.0, y=-0.095,
-        xanchor="left", yanchor="top",
-        showarrow=False,
-        align="left",
-        font=dict(size=10.5, color=SLATE),
+    ceros_ce = [abs(x) for x in _cruces_cero(xs, ce_corr)]
+    ceros_cae = sorted({round(abs(x), 2) for x in _cruces_cero(xs, cae_vals)})
+    texto = (
+        f"V se construye como kM/r (una Tierra esférica) más tres correcciones por su forma. El panel 1 compara su "
+        f"tamaño en P: kM/r aporta prácticamente todo el potencial ({r.KM_over_r / r.V_total * 100:.4f} % de V); "
+        f"la corrección A₂ es del orden de decenas de miles de J/kg y C.A y C.A.E son de decenas o centenas de J/kg. "
+        f"Por eso la escala es logarítmica: en escala normal solo se vería la barra de kM/r.\n"
+        f"Los paneles 2 a 4 muestran cómo cambia cada corrección si P se mueve en latitud (misma h y λ); el punto rosado "
+        f"es P y las líneas grises verticales marcan dónde la corrección vale cero. La corrección A₂ refleja el "
+        f"abultamiento ecuatorial: suma potencial cerca del ecuador y resta hacia los polos, y cambia de signo en "
+        f"±{ceros_ce[0] if ceros_ce else 35.26:.2f}° (donde sen²φ = 1/3). C.A reúne los grados 3 y 5, los términos que "
+        f"distinguen el hemisferio norte del sur. C.A.E (grado 4) forma bandas y cambia de signo en "
+        f"±{' y ±'.join(f'{c:.2f}°' for c in ceros_cae) if ceros_cae else '—'}."
     )
-    return fig
+    return _agregar_explicacion(fig, texto, alto_figura=1080, espacio_ejes=60)
+
+
+# ---------- 3. Potencial y gravedad en función de la altura ----------
 
 def graph_height(r):
-    hs = np.linspace(0, 100000, 121)
-    ys, central = [], []
+    h_max = min(max(100_000.0, 1.3 * r.h), 1_000_000.0)
+    hs = np.linspace(0.0, h_max, 161)
+    v_tot, central, grad = [], [], []
     for h in hs:
         rr = calculate_model(r.phi_deg, r.lam_deg, float(h))
-        ys.append(rr.V_total)
+        v_tot.append(rr.V_total)
         central.append(rr.KM_over_r)
+        grad.append(-_gradiente_vertical(r.phi_deg, r.lam_deg, float(h)))
+    g_p = -_gradiente_vertical(r.phi_deg, r.lam_deg, r.h)
+    km = hs / 1000
 
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=hs/1000, y=ys, mode="lines",
-                             line=dict(color=CLAY, width=3), name="V total"))
-    fig.add_trace(go.Scatter(x=hs/1000, y=central, mode="lines",
-                             line=dict(color=SLATE, width=1.8, dash="dash"), name="kM/r"))
-    fig.add_trace(go.Scatter(x=[r.h/1000], y=[r.V_total], mode="markers",
-                             marker=dict(size=10, color=MOSS, line=dict(color="white", width=2)),
-                             name="Punto actual"))
-    fig.update_layout(**base_layout(f"Potencial en función de la altura · φ = {r.phi_deg:.4f}°"))
-    fig.update_xaxes(title="Altura elipsoidal h [km]")
-    fig.update_yaxes(title="V [J/kg]")
-    return fig
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=.11, row_heights=[.6, .4],
+                        subplot_titles=("Potencial V al subir sobre P",
+                                        "Pendiente de V: la atracción gravitacional (−dV/dh)"))
+    fig.add_trace(go.Scatter(x=km, y=v_tot, mode="lines", line=dict(color=CLAY, width=3), name="V total",
+                             hovertemplate="h = %{x:.1f} km<br>V = %{y:,.2f} J/kg<extra></extra>"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=km, y=central, mode="lines", line=dict(color=SLATE, width=1.6, dash="dash"),
+                             name="kM/r (Tierra esférica)",
+                             hovertemplate="h = %{x:.1f} km<br>kM/r = %{y:,.2f} J/kg<extra></extra>"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=[r.h / 1000], y=[r.V_total], mode="markers", name="Punto P",
+                             marker=dict(size=12, color=MOSS, line=dict(color="white", width=2)),
+                             hovertemplate="Punto P<br>V = %{y:,.3f} J/kg<extra></extra>"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=km, y=grad, mode="lines", line=dict(color=ACCENT, width=2.6), showlegend=False,
+                             hovertemplate="h = %{x:.1f} km<br>−dV/dh = %{y:.4f} m/s²<extra></extra>"), row=2, col=1)
+    fig.add_trace(go.Scatter(x=[r.h / 1000], y=[g_p], mode="markers+text", showlegend=False,
+                             text=[f"P: {g_p:.4f} m/s²"], textposition="top right",
+                             marker=dict(size=11, color=MOSS, line=dict(color="white", width=2)),
+                             hovertemplate="Punto P<br>%{y:.5f} m/s²<extra></extra>"), row=2, col=1)
+
+    fig.update_layout(
+        paper_bgcolor=PAPER, plot_bgcolor=PAPER, separators=". ",
+        font=dict(family="Segoe UI, Arial", color=INK),
+        title=dict(text=f"¿Qué pasa con V al alejarse de la Tierra?  ·  φ = {_lat_txt(r.phi_deg)}",
+                   x=.02, xanchor="left", font=dict(size=18)),
+        legend=dict(x=.99, xanchor="right", y=.99, yanchor="top", bgcolor="rgba(255,253,252,.85)",
+                    bordercolor=GRID, borderwidth=1),
+        margin=dict(l=90, r=35, t=90),
+    )
+    for anot in fig.layout.annotations:
+        anot.update(x=0, xanchor="left", font=dict(size=13.5, color=INK))
+    fig.update_xaxes(gridcolor=GRID, zerolinecolor=GRID)
+    fig.update_xaxes(title="Altura elipsoidal h [km]", row=2, col=1)
+    fig.update_yaxes(title="V [J/kg]", tickformat=",.0f", gridcolor=GRID, row=1, col=1)
+    fig.update_yaxes(title="m/s²", tickformat=".2f", gridcolor=GRID, row=2, col=1)
+    fig.update_xaxes(zeroline=False)
+    _padding_y(fig, grad, 2, arriba=.3)
+
+    v_top = v_tot[-1]
+    texto = (
+        f"Arriba: V disminuye a medida que el punto se aleja de la Tierra, porque r aumenta. Entre h = 0 y "
+        f"h = {h_max / 1000:.0f} km, V baja {_v(v_tot[0] - v_top, 0)} J/kg. La línea discontinua (kM/r) casi coincide "
+        f"con V: la forma de la Tierra cambia el potencial muy poco frente al término de masa puntual.\n"
+        f"Abajo: la pendiente de la curva de arriba, con el signo cambiado, es la aceleración de la gravitación. En P "
+        f"vale {g_p:.4f} m/s²: subir 1 m reduce V en unos {g_p:.2f} J/kg. Esa relación es la que permite pasar de "
+        f"diferencias de potencial a diferencias de altura. La gravitación también disminuye con la altura "
+        f"(aproximadamente como 1/r²): entre 0 y {h_max / 1000:.0f} km pasa de {grad[0]:.3f} a {grad[-1]:.3f} m/s², "
+        f"así que V no baja exactamente en línea recta."
+    )
+    return _agregar_explicacion(fig, texto, alto_figura=720)
+
+
+# ---------- 4. Elipsoide 3D: dónde está P y cómo se reparte V ----------
+
+def _superficie_elipsoide(h, n_lat=73, n_lon=121, lon_ini=-180.0, lon_fin=180.0):
+    lat = np.radians(np.linspace(-90, 90, n_lat))
+    lon = np.radians(np.linspace(lon_ini, lon_fin, n_lon))
+    LAT, LON = np.meshgrid(lat, lon, indexing="ij")
+    s, c = np.sin(LAT), np.cos(LAT)
+    N = MODEL.a / np.sqrt(1 - MODEL.e2 * s**2)
+    X = (N + h) * c * np.cos(LON) / 1000
+    Y = (N + h) * c * np.sin(LON) / 1000
+    Z = ((1 - MODEL.e2) * N + h) * s / 1000
+    return np.degrees(lat), LAT, X, Y, Z
+
+
+def _paralelo(phi_deg, h, n=181, lon_ini=-180.0, lon_fin=180.0):
+    lon = np.radians(np.linspace(lon_ini, lon_fin, n))
+    p = math.radians(phi_deg)
+    N = MODEL.a / math.sqrt(1 - MODEL.e2 * math.sin(p) ** 2)
+    rad = (N + h) * math.cos(p) / 1000
+    z = ((1 - MODEL.e2) * N + h) * math.sin(p) / 1000
+    return rad * np.cos(lon), rad * np.sin(lon), np.full(n, z)
+
+
+def _punto_elevado(r, factor=1.012):
+    """Posición de P ligeramente por fuera de la superficie para que el marcador no quede enterrado."""
+    return r.X / 1000 * factor, r.Y / 1000 * factor, r.Z / 1000 * factor
+
+
+def _escena(lon_camara_deg, elev=0.55, dist=1.5):
+    lam = math.radians(lon_camara_deg)
+    oculto = dict(visible=False, showspikes=False)
+    return dict(
+        bgcolor=PAPER, xaxis=oculto, yaxis=oculto, zaxis=oculto, aspectmode="data",
+        camera=dict(eye=dict(x=dist * math.cos(lam), y=dist * math.sin(lam), z=elev), up=dict(x=0, y=0, z=1)),
+        dragmode="turntable",
+    )
+
+
+LUZ = dict(ambient=.78, diffuse=.45, specular=.05, roughness=.9, fresnel=.05)
+
+
+def _marcas_polos(h):
+    zp = (MODEL.b + h) / 1000 * 1.12
+    return go.Scatter3d(
+        x=[0, 0], y=[0, 0], z=[zp, -zp], mode="text", text=["<b>Polo Norte</b>", "<b>Polo Sur</b>"],
+        textfont=dict(size=12, color=INK), hoverinfo="skip", showlegend=False,
+    )
 
 
 def graph_ellipsoid(r):
-    """Elipsoide WGS84 con Norte/Sur explícitos y vista fija."""
-    lat = np.linspace(-np.pi/2, np.pi/2, 70)
-    lon = np.linspace(-np.pi, np.pi, 100)
-    LAT, LON = np.meshgrid(lat, lon, indexing="ij")
-
-    sin_lat = np.sin(LAT)
-    cos_lat = np.cos(LAT)
-    N = MODEL.a / np.sqrt(1 - MODEL.e2 * sin_lat**2)
-
-    X = (N * cos_lat * np.cos(LON)) / 1000.0
-    Y = (N * cos_lat * np.sin(LON)) / 1000.0
-    Z = ((1 - MODEL.e2) * N * sin_lat) / 1000.0
-
-    V = np.empty_like(LAT, dtype=float)
-    for i in range(LAT.shape[0]):
-        phi_deg = np.degrees(LAT[i, 0])
-        rr = calculate_model(float(phi_deg), r.lam_deg, 0.0)
-        V[i, :] = rr.V_total
-
-    px, py, pz = r.X / 1000.0, r.Y / 1000.0, r.Z / 1000.0
+    # Se retira una cuña de 90° al oeste de P para ver el centro, el eje y el radio r.
+    lam = r.lam_deg
+    lon_ini, lon_fin = lam, lam + 270.0
+    lats, LAT, X, Y, Z = _superficie_elipsoide(r.h, n_lon=136, lon_ini=lon_ini, lon_fin=lon_fin)
+    v_lat = np.array([calculate_model(float(p), lam, r.h).V_total for p in lats])
+    V = np.repeat(v_lat[:, None], X.shape[1], axis=1)  # V solo depende de la latitud
 
     fig = go.Figure()
-
     fig.add_trace(go.Surface(
-        x=X, y=Y, z=Z,
-        surfacecolor=V,
-        colorscale=[
-            [0.0, "#3F493D"],
-            [0.45, "#8E8A68"],
-            [0.72, "#C39A72"],
-            [1.0, "#875744"],
-        ],
-        colorbar=dict(title="V [J/kg]", len=.68, thickness=20, x=1.03),
-        hovertemplate="X=%{x:.1f} km<br>Y=%{y:.1f} km<br>Z=%{z:.1f} km<br>V=%{surfacecolor:.2f} J/kg<extra></extra>",
-        showscale=True
+        x=X, y=Y, z=Z, surfacecolor=V, lighting=LUZ,
+        colorscale=[[0.0, "#27332C"], [0.35, "#5E6B55"], [0.7, "#B7A77F"], [1.0, "#F1E3C4"]],
+        colorbar=dict(title=dict(text="V [J/kg]", side="right"), len=.7, thickness=18, x=1.0,
+                      tickformat=",.0f"),
+        hovertemplate="V = %{surfacecolor:,.2f} J/kg<extra></extra>", showlegend=False,
     ))
+    # caras del corte (planos meridianos en λ y λ − 90°)
+    t = np.linspace(0, 1, 14)
+    for mu in (lon_ini, lon_fin):
+        _, _, bx, by, bz = _superficie_elipsoide(r.h, n_lon=2, lon_ini=mu, lon_fin=mu)
+        T, BX = np.meshgrid(t, bx[:, 0], indexing="ij")
+        _, BY = np.meshgrid(t, by[:, 0], indexing="ij")
+        _, BZ = np.meshgrid(t, bz[:, 0], indexing="ij")
+        fig.add_trace(go.Surface(
+            x=T * BX, y=T * BY, z=T * BZ, surfacecolor=np.zeros_like(T), showscale=False,
+            colorscale=[[0, "#E6DACB"], [1, "#E6DACB"]], lighting=LUZ, hoverinfo="skip", showlegend=False,
+        ))
+        fig.add_trace(go.Scatter3d(x=bx[:, 0], y=by[:, 0], z=bz[:, 0], mode="lines",
+                                   line=dict(color="#8C8279", width=3), hoverinfo="skip", showlegend=False))
 
+    # líneas dibujadas sobre la cara del corte que contiene a P (desplazadas un poco hacia el observador)
+    off = math.radians(lam - 90)
+    dx, dy = 40 * math.cos(off), 40 * math.sin(off)
+    zp = (MODEL.b + r.h) / 1000
+    fig.add_trace(go.Scatter3d(x=[dx, dx], y=[dy, dy], z=[-zp * 1.06, zp * 1.06], mode="lines",
+                               line=dict(color=SLATE, width=4, dash="dash"), name="Eje de rotación",
+                               hoverinfo="skip"))
+    lr = math.radians(lam)
+    ra = (MODEL.a + r.h) / 1000
+    fig.add_trace(go.Scatter3d(x=[dx, ra * math.cos(lr) + dx], y=[dy, ra * math.sin(lr) + dy], z=[0, 0],
+                               mode="lines", line=dict(color=INK, width=4, dash="dot"),
+                               name="Radio ecuatorial (a)", hoverinfo="skip"))
+    px, py, pz = r.X / 1000, r.Y / 1000, r.Z / 1000
+    fig.add_trace(go.Scatter3d(x=[dx, px + dx], y=[dy, py + dy], z=[0, pz], mode="lines",
+                               line=dict(color=ACCENT, width=8),
+                               name=f"Radio geocéntrico r = {_v(r.r / 1000, 3)} km",
+                               hovertemplate=f"r = {_v(r.r, 3)} m<extra></extra>"))
+    ex, ey, ez = _paralelo(0.0, r.h + 12000, lon_ini=lon_ini, lon_fin=lon_fin)
+    fig.add_trace(go.Scatter3d(x=ex, y=ey, z=ez, mode="lines", line=dict(color=INK, width=3, dash="dash"),
+                               name="Ecuador", hoverinfo="skip"))
+    qx, qy, qz = _paralelo(r.phi_deg, r.h + 15000, lon_ini=lon_ini, lon_fin=lon_fin)
+    fig.add_trace(go.Scatter3d(x=qx, y=qy, z=qz, mode="lines", line=dict(color=ROSE, width=8),
+                               name=f"Paralelo de P: V = {_v(r.V_total)} J/kg",
+                               hovertemplate=f"Paralelo de P<br>V = {_v(r.V_total)} J/kg<extra></extra>"))
+    mx, my, mz = _punto_elevado(r)
     fig.add_trace(go.Scatter3d(
-        x=[px], y=[py], z=[pz],
-        mode="markers+text",
-        marker=dict(size=6, color=ROSE, line=dict(color="white", width=2)),
-        text=["P"],
-        textposition="top center",
-        name="Punto P",
-        hovertemplate=(
-            "Punto P<br>"
-            f"φ={r.phi_deg:.4f}°<br>"
-            f"λ={r.lam_deg:.4f}°<br>"
-            f"h={r.h:.2f} m<extra></extra>"
-        )
+        x=[mx], y=[my], z=[mz], mode="markers+text", text=["P  "], textposition="middle left",
+        textfont=dict(size=16, color=INK), marker=dict(size=8, color=CLAY, line=dict(color="white", width=2)),
+        name="Punto P", hovertemplate=(f"Punto P<br>φ = {_lat_txt(r.phi_deg)}<br>λ = {lam:.4f}°<br>"
+                                        f"h = {_v(r.h)} m<br>V = {_v(r.V_total, 3)} J/kg<extra></extra>"),
     ))
-
-    pole_z = MODEL.b / 1000.0
-    fig.add_trace(go.Scatter3d(
-        x=[0, 0], y=[0, 0], z=[pole_z * 1.08, -pole_z * 1.08],
-        mode="markers+text",
-        marker=dict(size=5, color=[MOSS, CLAY]),
-        text=["NORTE (+Z)", "SUR (−Z)"],
-        textposition=["top center", "bottom center"],
-        hoverinfo="skip",
-        showlegend=False
-    ))
+    fig.add_trace(go.Scatter3d(x=[dx], y=[dy], z=[0], mode="markers+text", text=["Centro de masas  "],
+                               textposition="middle left", textfont=dict(size=12, color=INK),
+                               marker=dict(size=4, color=INK), hoverinfo="skip", showlegend=False))
+    fig.add_trace(_marcas_polos(r.h))
 
     fig.update_layout(
-        title=dict(
-            text="Elipsoide WGS84 coloreado por potencial · Norte (+Z) / Sur (−Z)",
-            x=.02, xanchor="left", font=dict(size=20)
-        ),
-        paper_bgcolor=PAPER,
-        font=dict(family="Segoe UI, Arial", color=INK),
-        scene=dict(
-            bgcolor=PAPER,
-            xaxis=dict(title="X [km]", gridcolor=GRID, zerolinecolor=GRID, showspikes=False),
-            yaxis=dict(title="Y [km]", gridcolor=GRID, zerolinecolor=GRID, showspikes=False),
-            zaxis=dict(title="Z [km] · Norte (+) / Sur (−)", gridcolor=GRID, zerolinecolor=GRID, showspikes=False),
-            aspectmode="data",
-            camera=dict(
-                eye=dict(x=1.45, y=1.45, z=1.05),
-                up=dict(x=0, y=0, z=1)
-            ),
-            dragmode=False
-        ),
-        margin=dict(l=0, r=85, t=80, b=20),
-        showlegend=False,
-        uirevision="fixed-wgs84-view"
+        title=dict(text="¿Dónde está P y cómo se reparte V sobre la Tierra?", x=.02, xanchor="left",
+                   font=dict(size=19)),
+        paper_bgcolor=PAPER, separators=". ", font=dict(family="Segoe UI, Arial", color=INK),
+        scene=_escena(lam - 32, elev=.95, dist=1.3), margin=dict(l=0, r=10, t=70),
+        legend=dict(x=0, y=1, yanchor="top", bgcolor="rgba(255,253,252,.85)", bordercolor=GRID, borderwidth=1),
+        uirevision="elipsoide",
     )
-
-    return fig
-
-def graph_surface(r):
-    phis = np.linspace(0, 90, 46)
-    hs = np.linspace(0, 100000, 34)
-    P, H = np.meshgrid(phis, hs)
-    Z = np.empty_like(P)
-    for i in range(P.shape[0]):
-        for j in range(P.shape[1]):
-            Z[i, j] = calculate_model(float(P[i, j]), r.lam_deg, float(H[i, j])).V_total
-
-    fig = go.Figure(go.Surface(
-        x=P, y=H/1000, z=Z,
-        colorscale=[
-            [0.00, "#3E453A"], [0.35, "#74745D"],
-            [0.62, "#B79A68"], [0.82, "#B66C50"], [1.00, "#6A3C31"]
-        ]
-    ))
-    fig.update_layout(
-        title=dict(text="Superficie V(|φ|, h)", x=.02, xanchor="left"),
-        paper_bgcolor=PAPER, font=dict(family="Segoe UI, Arial", color=INK),
-        scene=dict(
-            bgcolor=PAPER,
-            xaxis=dict(title="|φ| [°]", gridcolor=GRID),
-            yaxis=dict(title="h [km]", gridcolor=GRID),
-            zaxis=dict(title="V [J/kg]", gridcolor=GRID),
-        ),
-        margin=dict(l=0, r=0, t=60, b=0)
+    rango = v_lat.max() - v_lat.min()
+    psi = math.degrees(math.atan2(r.Z, math.hypot(r.X, r.Y)))
+    texto = (
+        f"La superficie es el elipsoide WGS84 a la altura de P (h = {_v(r.h, 1)} m) y su color es el valor de V en "
+        f"cada lugar. Los colores forman franjas paralelas al ecuador: en este modelo V depende de la latitud y de r, "
+        f"pero no de la longitud, así que cambiar λ solo mueve P a lo largo de su paralelo (línea rosada), donde "
+        f"V = {_v(r.V_total)} J/kg en todos los puntos. V aumenta del ecuador (oscuro) a los polos (claro) en "
+        f"{_v(rango, 0)} J/kg porque la Tierra está achatada y los polos están más cerca del centro.\n"
+        f"Se quitó una cuña para ver el interior. La línea azul es el radio geocéntrico r = {_v(r.r / 1000, 3)} km, "
+        f"la distancia que entra en kM/r; forma con el plano del ecuador la latitud geocéntrica ψ = {psi:.4f}°, que "
+        f"difiere {abs(r.phi_deg - psi):.4f}° de la geodésica φ = {r.phi_deg:.4f}° (solo coinciden en el ecuador y en "
+        f"los polos). El achatamiento real (unos 21 km) no se alcanza a ver a esta "
+        f"escala. Arrastre para girar."
     )
-    return fig
+    return _agregar_explicacion(fig, texto, alto_figura=630, espacio_ejes=8)
 
+
+# ---------- 5. Globo 3D de cada corrección (valores reales en J/kg) ----------
 
 def graph_harmonic_shapes(r):
-    """
-    Tercera visualización 3D: forma angular de cada aporte.
-    La deformación radial se exagera deliberadamente para visualizar la
-    estructura armónica; no representa la forma física real de la Tierra.
-    Incluye C.E(A2), C.A(A3+A5) y C.A.E(A4).
-    """
-    lon = np.linspace(0, 2*np.pi, 96)
-    lat = np.linspace(-np.pi/2, np.pi/2, 64)
-    LON, LAT = np.meshgrid(lon, lat)
-
-    s = np.sin(LAT)
-
-    # Factores angulares normalizados de las expresiones del docente.
-    ce_shape = (1/3 - s**2)
-    ca_shape = ((5/2)*s**2 - 3/2) + 0.65 * (
-        15/8 - (35/4)*s**2 + (63/8)*s**4
-    ) * s
-    cae_shape = 3/35 + (1/7)*s**2 - (1/4)*np.sin(2*LAT)**2
-
-    def normalized_surface(shape, exaggeration=0.42):
-        maxabs = np.max(np.abs(shape))
-        q = shape / maxabs if maxabs else shape
-        rho = 1.0 + exaggeration*q
-        X = rho*np.cos(LAT)*np.cos(LON)
-        Y = rho*np.cos(LAT)*np.sin(LON)
-        Z = rho*np.sin(LAT)
-        return X, Y, Z, q
-
-    shapes = [
-        ("C.E · término A₂", ce_shape, [[0, "#4B5246"], [0.5, "#E7DDD1"], [1, "#B66C50"]]),
-        ("C.A · grados 3 y 5", ca_shape, [[0, "#3E4550"], [0.5, "#E7DDD1"], [1, "#B66C50"]]),
-        ("C.A.E · grado 4", cae_shape, [[0, "#59624E"], [0.5, "#E7DDD1"], [1, "#B79A68"]]),
+    lats, LAT, X, Y, Z = _superficie_elipsoide(r.h, n_lat=73, n_lon=81)
+    filas = [calculate_model(float(p), r.lam_deg, r.h) for p in lats]
+    capas = [
+        ("Corrección A₂ de C.E", np.array([f.V_CE - f.KM_over_r for f in filas]), r.V_CE - r.KM_over_r,
+         "Grado 2, efecto directo del achatamiento. Es positiva (rojo) en la franja ecuatorial, donde el abultamiento "
+         "del ecuador acerca más masa, y negativa (azul) hacia los polos. Es, con diferencia, la corrección más grande."),
+        ("Achatamiento C.A", np.array([f.V_CA for f in filas]), r.V_CA,
+         "Grados 3 y 5 (A₃ y A₅). Son los términos que hacen distinto el hemisferio norte del sur (la llamada «forma de "
+         "pera» de la Tierra): compare los colores a uno y otro lado del ecuador."),
+        ("Asimetría ecuatorial C.A.E", np.array([f.V_CAE for f in filas]), r.V_CAE,
+         "Grado 4 (A₄). Forma bandas: suma potencial en el ecuador y en los polos y lo resta en latitudes medias."),
+        ("Suma de las tres correcciones", np.array([f.V_total - f.KM_over_r for f in filas]), r.V_total - r.KM_over_r,
+         "Es V − kM/r: todo lo que la forma real de la Tierra añade o quita al potencial de una Tierra esférica. "
+         "Está dominada por la corrección A₂."),
     ]
 
     fig = go.Figure()
-
-    for i, (name, shape, colorscale) in enumerate(shapes):
-        X, Y, Z, q = normalized_surface(shape)
-        fig.add_trace(
-            go.Surface(
-                x=X, y=Y, z=Z,
-                surfacecolor=q,
-                colorscale=colorscale,
-                cmin=-1, cmax=1,
-                showscale=True,
-                visible=(i == 1),  # abre por defecto en C.A: la "reloj de arena"
-                colorbar=dict(
-                    title="Aporte normalizado",
-                    len=.62,
-                    x=1.02
-                ),
-                name=name,
-                hovertemplate=name + "<br>amplitud norm.=%{surfacecolor:.3f}<extra></extra>",
-            )
-        )
-
-    buttons = []
-    for idx, (name, _, _) in enumerate(shapes):
-        visible = [False] * len(shapes)
-        visible[idx] = True
-        buttons.append(dict(
-            label=name,
-            method="update",
-            args=[
-                {"visible": visible},
-                {"title": {"text": f"Forma 3D de {name} · deformación exagerada", "x": .02, "xanchor": "left"}}
-            ],
+    trazas_por_capa = []
+    for i, (nombre, vals, _, _) in enumerate(capas):
+        lim = float(np.max(np.abs(vals))) or 1.0
+        C = np.repeat(vals[:, None], X.shape[1], axis=1)
+        idx = [len(fig.data)]
+        fig.add_trace(go.Surface(
+            x=X, y=Y, z=Z, surfacecolor=C, cmin=-lim, cmax=lim, visible=(i == 0), lighting=LUZ,
+            colorscale=[[0, "#2E5A87"], [0.25, "#8FB3D1"], [0.5, "#F4EFE8"], [0.75, "#E3A184"], [1, "#9E3B26"]],
+            colorbar=dict(title=dict(text="J/kg", side="right"), len=.7, thickness=18, x=1.0, tickformat=",.1f"),
+            hovertemplate=nombre + "<br>%{surfacecolor:,.3f} J/kg<extra></extra>", showlegend=False,
         ))
+        # paralelos donde la corrección vale cero (separan rojo y azul)
+        for k, x0 in enumerate(_cruces_cero(lats, vals)):
+            cx, cy, cz = _paralelo(x0, r.h + 3000)
+            idx.append(len(fig.data))
+            fig.add_trace(go.Scatter3d(
+                x=cx, y=cy, z=cz, mode="lines", line=dict(color=INK, width=4), visible=(i == 0),
+                name="Paralelo donde la corrección vale 0", showlegend=(k == 0),
+                hovertemplate=f"Corrección = 0 en φ = {x0:.2f}°<extra></extra>",
+            ))
+        trazas_por_capa.append(idx)
+
+    i_fijas = len(fig.data)
+    px, py, pz = _punto_elevado(r)
+    fig.add_trace(go.Scatter3d(
+        x=[px], y=[py], z=[pz], mode="markers+text", text=["  P"], textposition="middle right",
+        textfont=dict(size=15, color=INK), marker=dict(size=7, color=CLAY, line=dict(color="white", width=2)),
+        name="Punto P", hovertemplate=(
+            f"Punto P ({_lat_txt(r.phi_deg)})<br>A₂ de C.E = {_v(r.V_CE - r.KM_over_r, 3)} J/kg<br>"
+            f"C.A = {_v(r.V_CA, 3)} J/kg<br>C.A.E = {_v(r.V_CAE, 3)} J/kg<extra></extra>"),
+    ))
+    fig.add_trace(_marcas_polos(r.h))
+    n_total = len(fig.data)
+
+    def textos(i):
+        nombre, vals, en_p, desc = capas[i]
+        cuerpo = (f"{desc} En P vale {_v(en_p, 3)} J/kg (≈ {_v(en_p / G_REF, 3)} m como altura equivalente); "
+                  f"sobre toda la Tierra va de {_v(vals.min(), 1)} a {_v(vals.max(), 1)} J/kg.\n"
+                  f"Rojo = la corrección aumenta V; azul = lo disminuye; blanco = casi cero. Las líneas negras son los "
+                  f"paralelos donde vale exactamente cero. La forma del globo es la real; lo que cambia es el color. "
+                  f"Use el menú para cambiar de corrección y arrastre para girar.")
+        return nombre, cuerpo
+
+    alto_base = 680
+    botones, anotaciones, alto_max = [], [], 0
+    for i in range(len(capas)):
+        nombre, cuerpo = textos(i)
+        contenido, alto_txt = _bloque_explicacion(cuerpo)
+        alto_max = max(alto_max, alto_txt)
+        anot = dict(text=contenido, xref="paper", yref="paper", x=0, y=0, xanchor="left", yanchor="top", yshift=-8,
+                    showarrow=False, align="left", font=dict(size=12.5, color=INK), bgcolor="#FFFDFC",
+                    bordercolor=GRID, borderwidth=1, borderpad=10)
+        anotaciones.append(anot)
+        visibles = [False] * n_total
+        for j in trazas_por_capa[i]:
+            visibles[j] = True
+        for j in range(i_fijas, n_total):
+            visibles[j] = True
+        botones.append(dict(label=nombre, method="update", args=[
+            {"visible": visibles},
+            {"title.text": f"¿Dónde suma y dónde resta cada corrección?  ·  {nombre}", "annotations": [anot]},
+        ]))
 
     fig.update_layout(
-        title=dict(
-            text="Forma 3D de C.A · grados 3 y 5 · deformación exagerada",
-            x=.02, xanchor="left"
-        ),
-        paper_bgcolor=PAPER,
-        font=dict(family="Segoe UI, Arial", color=INK),
-        scene=dict(
-            bgcolor=PAPER,
-            xaxis=dict(title="X*", gridcolor=GRID),
-            yaxis=dict(title="Y*", gridcolor=GRID),
-            zaxis=dict(title="Z*", gridcolor=GRID),
-            aspectmode="data",
-            camera=dict(eye=dict(x=1.45, y=1.45, z=1.05)),
-        ),
-        updatemenus=[dict(
-            type="dropdown",
-            direction="down",
-            x=.02, y=.98,
-            xanchor="left", yanchor="top",
-            buttons=buttons,
-            bgcolor="#FFFDFC",
-            bordercolor=GRID,
-            font=dict(color=INK),
-        )],
-        annotations=[dict(
-            text="Visualización cualitativa: la deformación está exagerada para revelar la estructura angular.",
-            xref="paper", yref="paper", x=.02, y=.02,
-            showarrow=False, align="left",
-            font=dict(size=11, color=SLATE),
-        )],
-        margin=dict(l=0, r=80, t=80, b=20),
+        title=dict(text=f"¿Dónde suma y dónde resta cada corrección?  ·  {capas[0][0]}", x=.02, xanchor="left",
+                   font=dict(size=19)),
+        paper_bgcolor=PAPER, separators=". ", font=dict(family="Segoe UI, Arial", color=INK),
+        scene=_escena(r.lam_deg, elev=.35 + .5 * math.sin(math.radians(r.phi_deg))), annotations=[anotaciones[0]],
+        updatemenus=[dict(type="dropdown", direction="down", x=0, y=1.0, xanchor="left", yanchor="top",
+                          buttons=botones, bgcolor="#FFFDFC", bordercolor=GRID, font=dict(color=INK), active=0)],
+        legend=dict(x=0, y=.9, yanchor="top", bgcolor="rgba(255,253,252,.85)", bordercolor=GRID, borderwidth=1),
+        height=alto_base + alto_max, margin=dict(l=0, r=10, t=70, b=alto_max + 20),
+        uirevision="correcciones",
     )
     return fig
+
+
+# Textos breves para que la interfaz pueda mostrar qué es cada gráfica.
+GRAFICAS_INFO = {
+    "profile": "Potencial total a la altura de P de polo a polo: muestra por qué V es mayor en los polos.",
+    "contributions": "Cuánto pesa cada término en V y cómo cambia cada corrección con la latitud.",
+    "height": "Cómo disminuye V al subir y cómo su pendiente da la gravedad.",
+    "ellipsoid": "Ubicación de P en la Tierra, su radio geocéntrico r y el reparto de V por latitudes.",
+    "shapes": "Globo con el valor real de cada corrección: dónde suma y dónde resta potencial.",
+}
 
 
 def parse_result(data):
@@ -1302,13 +1421,14 @@ def api_graph(kind):
             fig = graph_height(r)
         elif kind == "ellipsoid":
             fig = graph_ellipsoid(r)
-        elif kind == "surface":
-            fig = graph_surface(r)
         elif kind == "shapes":
             fig = graph_harmonic_shapes(r)
+        elif kind == "surface":
+            raise ValueError("La superficie 3D V(φ, h) se retiró; use «Potencial vs altura» o «Perfil».")
         else:
             raise ValueError("Gráfica no reconocida.")
-        return jsonify({"ok": True, "figure": pio.to_json(fig, pretty=False)})
+        return jsonify({"ok": True, "figure": pio.to_json(fig, pretty=False),
+                        "explanation": GRAFICAS_INFO.get(kind, "")})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
 
