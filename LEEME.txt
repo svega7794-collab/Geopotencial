@@ -1,0 +1,34 @@
+GEOPOTENCIAL 6 · PRESTIGE WEB EDITION
+=========================================
+
+Esta versión usa una interfaz web local premium, pero conserva el motor
+matemático en Python, Excel, historial, informe HTML y gráficas 2D/3D.
+
+INSTALACIÓN
+-----------
+En PowerShell/Terminal, dentro de esta carpeta:
+
+python -m pip install -r requirements.txt
+
+EJECUCIÓN
+---------
+python app.py
+
+La aplicación intenta abrirse como ventana independiente mediante pywebview.
+Si pywebview no puede abrirse, se abrirá automáticamente en el navegador:
+http://127.0.0.1:8765
+
+SALIDAS
+-------
+Se crea automáticamente:
+resultados_geopotencial/
+
+Con:
+- resultados_geopotencial.xlsx
+- reporte_geopotencial_6.html
+
+EQUIPO
+------
+Laura Vargas
+Michael
+Stephany Vega

@@ -1,0 +1,32 @@
+GEOPOTENCIAL 6 — CREAR EL .EXE
+================================
+
+1. En esta carpeta haga doble clic en:
+   CREAR_EXE.bat
+
+2. Espere a que termine. Puede tardar varios minutos.
+
+3. Al finalizar encontrará:
+   dist\GeoPotencial.exe
+
+4. Ese GeoPotencial.exe se abre con doble clic.
+   No necesita abrir Visual Studio ni escribir python app.py.
+
+5. Los Excel e informes se guardan en:
+   Documentos\GeoPotencial_Resultados
+
+IMPORTANTE
+----------
+La primera apertura del .exe puede tardar unos segundos porque Windows
+descomprime internamente los recursos del programa.
+
+NUEVA GRÁFICA 3D
+-----------------
+"Forma 3D de cada aporte" permite alternar:
+- C.E · término A2
+- C.A · grados 3 y 5
+- C.A.E · grado 4
+
+La vista abre por defecto en C.A, que genera la forma parecida a un
+reloj de arena que recordabas. La deformación está exagerada
+deliberadamente para que la estructura angular pueda interpretarse.

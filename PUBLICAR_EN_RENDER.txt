@@ -1,0 +1,48 @@
+GEOPOTENCIAL 6 — PUBLICAR COMO PÁGINA WEB
+============================================
+
+RECOMENDADO: RENDER
+
+La carpeta ya está preparada para Render.
+
+ARCHIVOS IMPORTANTES
+--------------------
+app.py
+requirements.txt
+render.yaml
+.python-version
+templates/index.html
+
+PASOS RÁPIDOS
+-------------
+1. Crea un repositorio nuevo en GitHub.
+2. Sube TODO el contenido de esta carpeta GeoPotencial6 al repositorio.
+3. En Render crea un nuevo Web Service.
+4. Conecta ese repositorio.
+5. Render detectará render.yaml.
+6. Espera a que termine el despliegue.
+7. Render te dará una URL pública tipo:
+   https://geopotencial-6.onrender.com
+
+Tus compañeros solo tendrán que abrir ese enlace.
+
+IMPORTANTE SOBRE EL HISTORIAL
+-----------------------------
+La versión web comparte el historial entre las personas que usen el mismo
+sitio durante la sesión del servidor.
+
+En el plan gratuito de Render, el sistema de archivos es efímero:
+el Excel/historial puede reiniciarse cuando el servicio se reinicia o se
+vuelve a desplegar. El botón Descargar Excel funciona para bajar una copia
+del historial disponible en ese momento.
+
+Para una entrega permanente del historial se necesitaría una base de datos
+o almacenamiento persistente; no es necesario para mostrar/calcular el bono.
+
+INICIO EN RENDER
+----------------
+Build:
+pip install -r requirements.txt
+
+Start:
+gunicorn app:app --workers 1 --threads 8 --timeout 120
