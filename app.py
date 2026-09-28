@@ -874,19 +874,26 @@ def graph_contributions(r):
         )
 
     fig.update_layout(
-        height=900,
+        height=940,
         paper_bgcolor=PAPER,
         plot_bgcolor=PAPER,
         font=dict(family="Segoe UI, Arial", color=INK),
-        margin=dict(l=68, r=40, t=95, b=60),
+        # Más espacio arriba y abajo para evitar solapamientos de textos.
+        margin=dict(l=68, r=40, t=145, b=105),
         title=dict(
             text="Correcciones armónicas por latitud",
             x=.02, xanchor="left",
+            y=.985, yanchor="top",
             font=dict(size=20)
         ),
         bargap=.48,
         showlegend=False,
     )
+
+    # Los títulos automáticos de los subgráficos quedan demasiado cerca
+    # del título principal en Plotly. Bajamos únicamente el primero.
+    if fig.layout.annotations:
+        fig.layout.annotations[0].update(yshift=-34)
 
     for rr in range(2, 5):
         fig.update_xaxes(
@@ -907,10 +914,17 @@ def graph_contributions(r):
     fig.update_yaxes(title="J/kg", gridcolor=GRID, row=1, col=1)
 
     fig.add_annotation(
-        text="Comparación de términos correctivos: en C.E se muestra únicamente A₂; el término central kM/r no se incluye para evitar ocultar C.A y C.A.E por diferencia de escala.",
-        xref="paper", yref="paper", x=0.0, y=1.03,
-        showarrow=False, align="left",
-        font=dict(size=11, color=SLATE),
+        text=(
+            "Nota de lectura: en C.E se representa solo la corrección A₂. "
+            "El término central kM/r se deja fuera de esta comparación para que "
+            "C.A y C.A.E puedan apreciarse pese a la diferencia de escala."
+        ),
+        xref="paper", yref="paper",
+        x=0.0, y=-0.095,
+        xanchor="left", yanchor="top",
+        showarrow=False,
+        align="left",
+        font=dict(size=10.5, color=SLATE),
     )
     return fig
 
