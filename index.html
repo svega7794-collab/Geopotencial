@@ -3927,7 +3927,7 @@ label{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bot
 .segment{display:inline-flex;background:#EEE6DC;padding:4px;border-radius:13px;margin-bottom:15px}.segment button{border:0;background:transparent;padding:9px 14px;border-radius:10px;color:var(--muted);font-weight:700}.segment button.active{background:white;color:var(--ink);box-shadow:0 5px 15px rgba(60,50,40,.08)}
 .kpi{background:#F6F0E9;border:1px solid #E4D9CE;border-radius:18px;padding:18px}.kpi small{color:var(--muted);font-weight:700}.kpi b{font-size:22px;display:block;margin-top:7px}
 .total-box{background:linear-gradient(135deg,var(--graphite),#514A44);color:white;border-radius:22px;padding:26px}.total-box small{color:#DCCFC4}.total-box strong{font-size:32px;display:block;margin-top:6px}
-.result-table{width:100%;border-collapse:separate;border-spacing:0 8px}.result-table td{padding:15px 14px;background:#F7F1EA}.result-table td:first-child{border-radius:14px 0 0 14px;font-weight:800}.result-table td:last-child{border-radius:0 14px 14px 0;text-align:right;font-weight:800}
+.result-table{width:100%;border-collapse:separate;border-spacing:0 8px}.result-table td{padding:15px 14px;background:#F7F1EA}.result-table td:first-child{border-radius:14px 0 0 14px;font-weight:800}.result-table td:last-child{border-radius:0 14px 14px 0;text-align:right;font-weight:800}.result-table th{padding:8px 14px 4px;text-align:left;font-size:11px;line-height:1.35;color:var(--muted);font-weight:800;vertical-align:bottom}.result-table th:last-child{text-align:right}.result-table td:nth-child(2){font-family:Cambria Math,Georgia,serif;text-align:center;font-weight:700}.scaled-result{display:flex;flex-direction:column;align-items:flex-end;gap:3px}.scaled-result small{font-size:10px;color:var(--muted);font-weight:700}.scaled-result b{font-size:15px;color:var(--ink)}.kmr-strip{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#EFE7DE;border:1px solid #DED2C6;border-radius:14px;padding:12px 14px;margin-bottom:12px}.kmr-strip .kmr-label{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}.kmr-strip .kmr-value{font-family:Cambria Math,Georgia,serif;font-size:16px;font-weight:800;color:var(--graphite)}.result-explainer{margin-top:10px;padding:11px 13px;border-radius:12px;background:#FBF7F2;border:1px solid #E9DED3;color:var(--muted);font-size:12px;line-height:1.55}.result-explainer b{color:var(--ink)}.conversion-strip{margin-top:12px;padding:11px 13px;background:#FFFDFC;border:1px solid #DED2C6;border-radius:12px;font-size:13px;line-height:1.55;color:var(--muted)}.conversion-strip b{color:var(--ink)}
 .math-card{border-left:5px solid var(--clay);background:#F3ECE4;border-radius:18px;padding:22px;margin:14px 0}.math-card h3{margin:0 0 10px}.formula{font-family:Cambria Math,Georgia,serif;font-size:20px;line-height:1.7}.substitution{color:var(--muted);margin-top:10px;line-height:1.6}.math-result{margin-top:12px;font-weight:800;color:var(--moss)}
 .graph-layout{display:grid;grid-template-columns:280px 1fr;gap:16px}.graph-menu{position:sticky;top:98px;height:max-content}.graph-choice{display:block;width:100%;text-align:left;padding:12px 13px;border:0;border-radius:12px;background:transparent;margin:3px 0;color:var(--ink)}.graph-choice.active,.graph-choice:hover{background:#ECE4DA}.graph-box{min-height:650px}
 .tabs{display:flex;gap:6px;background:#EEE5DB;border-radius:14px;padding:5px;width:max-content;margin-bottom:14px}.tabs button{border:0;border-radius:10px;padding:9px 18px;background:transparent;font-weight:800;color:var(--muted)}.tabs button.active{background:var(--graphite);color:white}
@@ -4012,7 +4012,7 @@ label{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bot
   .kpi b{font-size:19px}
   .total-box{padding:20px;border-radius:18px}
   .total-box strong{font-size:25px;overflow-wrap:anywhere}
-  .result-table{min-width:520px}
+  .result-table{min-width:700px}.kmr-strip{align-items:flex-start;flex-direction:column}.result-table th{font-size:10px}
   .math-card{padding:17px}
   .formula{font-size:17px;overflow-wrap:anywhere}
   .tabs{width:100%;display:grid;grid-template-columns:1fr 1fr}
@@ -4071,9 +4071,44 @@ label{display:block;font-size:12px;font-weight:800;color:var(--muted);margin-bot
 </div>
 <div><div class="total-box"><small>Potencial gravitacional total</small><strong id="vTotal">— J/kg</strong><div style="margin-top:8px;color:#DDD2C8">V = (kM/r) · [ C.E + C.A + C.A.E ]</div></div>
 <div class="grid3" style="margin-top:14px"><div class="kpi"><small>Radio geocéntrico r</small><b id="rVal">—</b><span>m</span></div><div class="kpi"><small>Radio N</small><b id="nVal">—</b><span>m</span></div><div class="kpi"><small>Colatitud θ</small><b id="thetaVal">—</b><span>°</span></div></div>
-<div class="card" style="margin-top:14px"><table class="result-table">
-<tr><td>Contribución esférica C.E</td><td id="ceVal">—</td><td id="vceVal">— J/kg</td></tr><tr><td>Achatamiento C.A</td><td id="caVal">—</td><td id="vcaVal">— J/kg</td></tr><tr><td>Asimetría ecuatorial C.A.E</td><td id="caeVal">—</td><td id="vcaeVal">— J/kg</td></tr>
-</table></div></div>
+<div class="card" style="margin-top:14px">
+<div class="kmr-strip">
+  <div>
+    <div class="kmr-label">Factor común que transforma cada término en potencial</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:3px">Cada valor neto de C.E, C.A y C.A.E es adimensional.</div>
+  </div>
+  <div class="kmr-value">kM/r = <span id="kmrCalcVal">—</span> J/kg</div>
+</div>
+<div style="overflow-x:auto">
+<table class="result-table">
+<thead>
+<tr>
+  <th>Término</th>
+  <th>1 · Valor neto<br><span style="font-weight:500">(factor adimensional)</span></th>
+  <th>2 · Aporte al potencial<br><span style="font-weight:500">= (kM/r) × valor neto</span></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Contribución esférica C.E</td>
+  <td id="ceVal">—</td>
+  <td><div class="scaled-result"><small>(kM/r) × C.E</small><b id="vceVal">— J/kg</b></div></td>
+</tr>
+<tr>
+  <td>Achatamiento C.A</td>
+  <td id="caVal">—</td>
+  <td><div class="scaled-result"><small>(kM/r) × C.A</small><b id="vcaVal">— J/kg</b></div></td>
+</tr>
+<tr>
+  <td>Asimetría ecuatorial C.A.E</td>
+  <td id="caeVal">—</td>
+  <td><div class="scaled-result"><small>(kM/r) × C.A.E</small><b id="vcaeVal">— J/kg</b></div></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="result-explainer"><b>Cómo leer esta tabla:</b> la columna 1 conserva el valor neto calculado por la ecuación de cada término. La columna 2 muestra ese mismo valor después de multiplicarlo por el factor común <b>kM/r</b>; por eso el resultado cambia a unidades de <b>J/kg</b> y es el aporte que entra en el potencial total V.</div>
+</div></div>
 </div></div></section>
 
 <section id="operaciones" class="page"><div class="container"><div class="section-head"><div><h2>Operaciones</h2><p>La aplicación no es una caja negra: cada aporte muestra fórmula, sustitución y resultado.</p></div></div><div id="mathCards"></div></div></section>
@@ -4113,7 +4148,51 @@ document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.pa
 function setMode(m){currentMode=m;dmsFields.style.display=m==='dms'?'block':'none';decFields.style.display=m==='decimal'?'block':'none';modeDMS.classList.toggle('active',m==='dms');modeDEC.classList.toggle('active',m==='decimal')}
 function f(v,d=4){if(v===null||v===undefined||!isFinite(v))return'—';if(v!==0&&(Math.abs(v)>=1e12||Math.abs(v)<1e-6))return Number(v).toExponential(6).toUpperCase();return Number(v).toFixed(d)}
 async function calculate(){try{const res=await fetch('/api/calculate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const j=await res.json();if(!j.ok)throw new Error(j.error);currentResult=j.result;renderResult(j.result);calcMsg.textContent='✓ Cálculo actualizado con el modelo WGS84.'}catch(e){calcMsg.textContent='⚠ '+e.message;showToast(e.message)}}
-function renderResult(r){topV.textContent='V = '+f(r.V_total)+' J/kg';vTotal.textContent=f(r.V_total)+' J/kg';rVal.textContent=f(r.r);nVal.textContent=f(r.N);thetaVal.textContent=f(r.theta_deg);ceVal.textContent=f(r.CE,10);caVal.textContent=f(r.CA,10);caeVal.textContent=f(r.CAE,10);vceVal.textContent=f(r.V_CE)+' J/kg';vcaVal.textContent=f(r.V_CA)+' J/kg';vcaeVal.textContent=f(r.V_CAE)+' J/kg';xVal.textContent=f(r.X);yVal.textContent=f(r.Y);zVal.textContent=f(r.Z);kmrVal.textContent=f(r.KM_over_r);mathCards.innerHTML=[['Contribución esférica C.E','CE',r.V_CE],['Achatamiento C.A','CA',r.V_CA],['Asimetría ecuatorial C.A.E','CAE',r.V_CAE],['Potencial total','TOTAL',r.V_total]].map(x=>`<div class="math-card"><h3>${x[0]}</h3><div class="formula">${r.formulas[x[1]]}</div><div class="substitution">${r.substitutions[x[1]]}</div><div class="math-result">Resultado: ${f(x[2])} J/kg</div></div>`).join('')}
+function renderResult(r){
+  topV.textContent='V = '+f(r.V_total)+' J/kg';
+  vTotal.textContent=f(r.V_total)+' J/kg';
+  rVal.textContent=f(r.r);
+  nVal.textContent=f(r.N);
+  thetaVal.textContent=f(r.theta_deg);
+
+  ceVal.textContent=f(r.CE,10);
+  caVal.textContent=f(r.CA,10);
+  caeVal.textContent=f(r.CAE,10);
+
+  kmrCalcVal.textContent=f(r.KM_over_r);
+  vceVal.textContent=f(r.V_CE)+' J/kg';
+  vcaVal.textContent=f(r.V_CA)+' J/kg';
+  vcaeVal.textContent=f(r.V_CAE)+' J/kg';
+
+  xVal.textContent=f(r.X);
+  yVal.textContent=f(r.Y);
+  zVal.textContent=f(r.Z);
+  kmrVal.textContent=f(r.KM_over_r);
+
+  const aportes=[
+    ['Contribución esférica C.E','CE',r.CE,r.V_CE],
+    ['Achatamiento C.A','CA',r.CA,r.V_CA],
+    ['Asimetría ecuatorial C.A.E','CAE',r.CAE,r.V_CAE]
+  ];
+
+  mathCards.innerHTML=aportes.map(x=>`
+    <div class="math-card">
+      <h3>${x[0]}</h3>
+      <div class="formula">${r.formulas[x[1]]}</div>
+      <div class="substitution">${r.substitutions[x[1]]}</div>
+      <div class="conversion-strip">
+        <b>Valor neto:</b> ${f(x[2],10)} &nbsp;→&nbsp;
+        <b>Aporte al potencial:</b>
+        (${f(r.KM_over_r)} J/kg) × (${f(x[2],10)}) = <b>${f(x[3])} J/kg</b>
+      </div>
+    </div>`).join('') + `
+    <div class="math-card">
+      <h3>Potencial total</h3>
+      <div class="formula">${r.formulas.TOTAL}</div>
+      <div class="substitution">${r.substitutions.TOTAL}</div>
+      <div class="math-result">Resultado: ${f(r.V_total)} J/kg</div>
+    </div>`;
+}
 async function register(){await calculate();if(!currentResult)return;try{const res=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const j=await res.json();if(!j.ok)throw new Error(j.error);showToast('✓ Resultado '+j.number+' registrado en Excel')}catch(e){showToast(e.message)}}
 function setGraphMode(m){tab2d.classList.toggle('active',m==='2d');tab3d.classList.toggle('active',m==='3d');choices2d.style.display=m==='2d'?'block':'none';choices3d.style.display=m==='3d'?'block':'none'}
 async function loadGraph(kind,el){if(typeof Plotly==='undefined'){showToast('No se pudo cargar el motor de gráficas Plotly.');return;}lastGraph=kind;if(el){document.querySelectorAll('.graph-choice').forEach(x=>x.classList.remove('active'));el.classList.add('active')}try{const res=await fetch('/api/graph/'+kind,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload())});const j=await res.json();if(!j.ok)throw new Error(j.error);const fig=JSON.parse(j.figure);Plotly.newPlot('graph',fig.data,fig.layout,{responsive:true,displaylogo:false})}catch(e){showToast(e.message)}}
